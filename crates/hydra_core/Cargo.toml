@@ -1,0 +1,17 @@
+[package]
+name = "hydra_core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+async-trait = { workspace = true }
+rust_decimal = { workspace = true }
+argus = { workspace = true }
+anyhow = { workspace = true}
+serde = { workspace = true }
+# sha2 = { workspace = true }
+hmac = { workspace = true }
+hex = { workspace = true }
+sha2 = { workspace = true }
+reqwest = { workspace = true }
