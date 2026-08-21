@@ -7,6 +7,7 @@ use hydra_core::{
 use reqwest::{Client, Response, header::HeaderValue};
 use secrecy::{ExposeSecret, SecretString};
 
+#[derive(Debug, Clone)]
 pub struct Indodax {
     pub id: Box<str>,
     pub name: Box<str>,
