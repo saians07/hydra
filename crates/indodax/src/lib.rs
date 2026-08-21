@@ -10,8 +10,8 @@ use secrecy::{ExposeSecret, SecretString};
 pub struct Indodax {
     pub id: Box<str>,
     pub name: Box<str>,
-    api_key: Box<SecretString>,
-    secret_key: Box<SecretString>,
+    api_key: SecretString,
+    secret_key: SecretString,
     pub private_api_url: Box<str>,
     pub public_api_url: Box<str>,
     pub private_ws_url: Box<str>,
@@ -19,7 +19,7 @@ pub struct Indodax {
 }
 
 impl Indodax {
-    pub fn new(api_key: Box<SecretString>, secret_key: Box<SecretString>) -> Self {
+    pub fn new(api_key: SecretString, secret_key: SecretString) -> Self {
         Self {
             id: Box::from("indodax"),
             name: Box::from("INDODAX"),
@@ -105,11 +105,7 @@ impl CexMarket for Indodax {
 // this is the specific implementation of Indodax endpoint.
 impl Indodax {
     /// Private getInfo endpoint of Indondax
-    pub async fn priv_get_info(
-        &self,
-        sign_key: SecretString,
-        client: Client,
-    ) -> Result<Response, CustomErr> {
+    pub async fn priv_get_info(&self, client: Client) -> Result<Response, CustomErr> {
         let (now, recv_window) = self.get_recv_window().await?;
         let body = format!(
             "method=getInfo&timestamp={:?}&recvWindow={:?}",
