@@ -1,13 +1,14 @@
 use async_trait::async_trait;
 use rust_decimal::Decimal;
 
-pub enum BalanceType {
-    IDR,
-    USDT,
-    TKO,
+#[derive(Debug, Default)]
+pub struct Balance {
+    pub available: Decimal,
+    pub locked: Decimal,
+    pub freeze: Decimal,
 }
 
 #[async_trait]
-pub trait BalanceManager {
-    async fn get_balance(&self, balance_type: BalanceType) -> Decimal;
+pub trait ManageBalance {
+    async fn get_balance(&self, asset: &str) -> Decimal;
 }
