@@ -1,7 +1,6 @@
 use argus::errors::CustomErr;
 use async_trait::async_trait;
 use reqwest::{Client, Response};
-use secrecy::SecretString;
 
 use crate::utils::RequestType;
 
@@ -11,16 +10,11 @@ pub trait CexMarket {
         &self,
         payload: T,
     ) -> Result<Box<str>, CustomErr>;
-    async fn sign_payload(
-        &self,
-        payload: &str,
-        sign_key: SecretString,
-    ) -> Result<Box<str>, CustomErr>;
+    async fn sign_payload(&self, payload: &str) -> Result<Box<str>, CustomErr>;
     async fn send_request(
         &self,
         body: &str,
         url: &str,
-        sign_key: Option<SecretString>,
         request_type: RequestType,
         client: Client,
     ) -> Result<Response, CustomErr>;

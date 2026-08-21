@@ -10,6 +10,8 @@ use secrecy::{ExposeSecret, SecretString};
 pub struct Indodax {
     pub id: Box<str>,
     pub name: Box<str>,
+    api_key: Box<SecretString>,
+    secret_key: Box<SecretString>,
     pub private_api_url: Box<str>,
     pub public_api_url: Box<str>,
     pub private_ws_url: Box<str>,
@@ -17,10 +19,12 @@ pub struct Indodax {
 }
 
 impl Indodax {
-    pub fn new(id: Box<str>, name: Box<str>) -> Self {
+    pub fn new(api_key: Box<SecretString>, secret_key: Box<SecretString>) -> Self {
         Self {
-            id,
-            name,
+            id: Box::from("indodax"),
+            name: Box::from("INDODAX"),
+            api_key,
+            secret_key,
             private_api_url: "https://indodax.com/tapi".into(),
             public_api_url: "https://indodax.com".into(),
             private_ws_url: "".into(),
@@ -42,12 +46,8 @@ impl CexMarket for Indodax {
         }
     }
 
-    async fn sign_payload(
-        &self,
-        payload: &str,
-        sign_key: SecretString,
-    ) -> Result<Box<str>, CustomErr> {
-        let result = hmac_512(payload, sign_key.expose_secret())?;
+    async fn sign_payload(&self, payload: &str) -> Result<Box<str>, CustomErr> {
+        let result = hmac_512(payload, self.secret_key.expose_secret())?;
 
         Ok(Box::from(result))
     }
@@ -56,7 +56,6 @@ impl CexMarket for Indodax {
         &self,
         body: &str,
         url: &str,
-        sign_key: Option<SecretString>,
         request_type: RequestType,
         client: Client,
     ) -> Result<Response, CustomErr> {
@@ -73,19 +72,13 @@ impl CexMarket for Indodax {
                 Ok(result)
             }
             RequestType::POST => {
-                let Some(sign_key) = sign_key else {
-                    return Err(CustomErr::Operation {
-                        operation: "Failed to send request to Indodax".into(),
-                        source: None,
-                    });
-                };
-                let signed_body = self.sign_payload(body, sign_key.clone()).await?;
+                let signed_body = self.sign_payload(body).await?;
                 let result = client
                     .post(url)
                     .header("Content-Type", "application/x-www-form-urlencoded")
                     .header(
                         "Key",
-                        HeaderValue::from_str(&sign_key.clone().expose_secret()).unwrap(),
+                        HeaderValue::from_str(&self.api_key.expose_secret()).unwrap(),
                     )
                     .header("Sign", HeaderValue::from_str(&signed_body).unwrap())
                     .send()
@@ -124,13 +117,7 @@ impl Indodax {
         );
 
         let result = self
-            .send_request(
-                &body,
-                &self.private_api_url,
-                Some(sign_key),
-                RequestType::POST,
-                client,
-            )
+            .send_request(&body, &self.private_api_url, RequestType::POST, client)
             .await?;
 
         Ok(result)
