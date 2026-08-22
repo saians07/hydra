@@ -60,7 +60,7 @@ impl CexMarket for Indodax {
         body: &str,
         url: &str,
         request_type: RequestType,
-        client: Client,
+        client: &Client,
     ) -> Result<Response, CustomErr> {
         match request_type {
             RequestType::GET => {
@@ -118,7 +118,12 @@ impl Indodax {
         );
 
         let result = self
-            .send_request(&body, &self.private_api_url, RequestType::POST, self.client)
+            .send_request(
+                &body,
+                &self.private_api_url,
+                RequestType::POST,
+                &self.client,
+            )
             .await?;
 
         Ok(result)

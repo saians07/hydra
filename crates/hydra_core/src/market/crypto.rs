@@ -16,7 +16,7 @@ pub trait CexMarket {
         body: &str,
         url: &str,
         request_type: RequestType,
-        client: Client,
+        client: &Client,
     ) -> Result<Response, CustomErr>;
     async fn get_recv_window(&self) -> Result<(i64, i64), CustomErr>;
 }
