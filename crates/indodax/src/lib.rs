@@ -17,10 +17,11 @@ pub struct Indodax {
     pub public_api_url: Box<str>,
     pub private_ws_url: Box<str>,
     pub public_ws_url: Box<str>,
+    pub client: Client,
 }
 
 impl Indodax {
-    pub fn new(api_key: SecretString, secret_key: SecretString) -> Self {
+    pub fn new(api_key: SecretString, secret_key: SecretString, client: Client) -> Self {
         Self {
             id: Box::from("indodax"),
             name: Box::from("INDODAX"),
@@ -30,6 +31,7 @@ impl Indodax {
             public_api_url: "https://indodax.com".into(),
             private_ws_url: "".into(),
             public_ws_url: "".into(),
+            client,
         }
     }
 }
@@ -101,12 +103,14 @@ impl CexMarket for Indodax {
 
         Ok((now, recv_window))
     }
+
+    // async fn serialize_response()
 }
 
 // this is the specific implementation of Indodax endpoint.
 impl Indodax {
     /// Private getInfo endpoint of Indondax
-    pub async fn priv_get_info(&self, client: Client) -> Result<Response, CustomErr> {
+    pub async fn priv_get_info(&self) -> Result<Response, CustomErr> {
         let (now, recv_window) = self.get_recv_window().await?;
         let body = format!(
             "method=getInfo&timestamp={:?}&recvWindow={:?}",
@@ -114,9 +118,11 @@ impl Indodax {
         );
 
         let result = self
-            .send_request(&body, &self.private_api_url, RequestType::POST, client)
+            .send_request(&body, &self.private_api_url, RequestType::POST, self.client)
             .await?;
 
         Ok(result)
     }
+
+    // pub async fn trade(&self, client: Client) ->
 }
