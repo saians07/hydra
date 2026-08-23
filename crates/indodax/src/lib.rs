@@ -119,6 +119,7 @@ impl CexMarket for Indodax {
                         HeaderValue::from_str(&self.api_key.expose_secret()).unwrap(),
                     )
                     .header("Sign", HeaderValue::from_str(&signed_body).unwrap())
+                    .body(body.to_owned())
                     .send()
                     .await
                     .map_err(|e| CustomErr::operation("Failed to request data from Indodax", e))?
@@ -212,6 +213,11 @@ impl CexMarket for Indodax {
             Side::SELL => "receive",
         };
 
+        let quote_name: Box<str> = match order.quote_name.as_ref() {
+            "idr" => Box::from("rp"),
+            _ => Box::from(order.quote_name.to_lowercase()),
+        };
+
         let response = TradeResponse {
             fee_cost: TradeResponse::convert_to_decimal(
                 returned_data
@@ -233,7 +239,7 @@ impl CexMarket for Indodax {
             quote_amount: Some(
                 TradeResponse::convert_to_decimal(
                     returned_data
-                        .get(format!("{}_{}", quote_key, order.quote_name.to_lowercase()).as_str())
+                        .get(format!("{}_{}", quote_key, quote_name).as_str())
                         .ok_or_else(|| {
                             CustomErr::operation_ori("Failed to extract quote currencty data.")
                         })?,
