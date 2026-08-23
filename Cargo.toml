@@ -16,7 +16,8 @@ serde = "1.0.229"
 rust_decimal = "1.42.1"
 reqwest = "0.13.4"
 serde_qs = "1.1.3"
-argus = { git = "ssh://git@github.com/saians07/argus.git", branch = "master" , features = ["errors"]}
+serde_json = "1.0.151"
+argus = { git = "ssh://git@github.com/saians07/argus.git", branch = "master" , features = ["errors", "logs"]}
 hmac = "0.13.0"
 hex = "0.4.3"
 sha2 = "0.11.0"
