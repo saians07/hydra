@@ -1,11 +1,16 @@
+use std::collections::HashMap;
+
 use argus::errors::CustomErr;
 use async_trait::async_trait;
 use hydra_core::{
-    market::crypto::CexMarket,
+    market::crypto::{CexMarket, Order, Side, TradeResponse},
     utils::{RequestType, hmac_512},
 };
 use reqwest::{Client, Response, header::HeaderValue};
+use rust_decimal::Decimal;
 use secrecy::{ExposeSecret, SecretString};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 #[derive(Debug, Clone)]
 pub struct Indodax {
@@ -18,6 +23,36 @@ pub struct Indodax {
     pub private_ws_url: Box<str>,
     pub public_ws_url: Box<str>,
     pub client: Client,
+}
+
+// Indodax has no side member, it only has type for side and order_type
+#[derive(Debug, Serialize)]
+struct IndodaxOrder {
+    pub method: Box<str>,
+    pub timestamp: i64,
+    pub recv_window: i64,
+    pub pair: Box<str>,
+    #[serde(rename = "type")]
+    pub side: Box<str>,
+    order_type: Box<str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    price: Option<Decimal>,
+    // we need change this to the specific quote name
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quote_qty: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base_qty: Option<Decimal>,
+}
+
+// this will capture all kinds of indodax response
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
+struct IndodaxResponse {
+    #[serde(rename = "return")]
+    pub returned_data: Option<HashMap<String, Value>>,
+    pub success: Option<i32>,
+    pub error: Option<Box<str>>,
+    pub message: Option<Box<str>>,
+    pub tickers: Option<HashMap<String, Value>>,
 }
 
 impl Indodax {
@@ -104,13 +139,117 @@ impl CexMarket for Indodax {
         Ok((now, recv_window))
     }
 
-    // async fn serialize_response()
+    async fn private_trade(&self, order: Order) -> Result<TradeResponse, CustomErr> {
+        let (now, recv_window) = self.get_recv_window().await?;
+        let side: Box<str> = match order.order_side {
+            Side::BUY => "buy".into(),
+            Side::SELL => "sell".into(),
+        };
+        // convert general order to specific order market
+        let market_order = IndodaxOrder {
+            method: "trade".into(),
+            timestamp: now,
+            recv_window,
+            pair: format!(
+                "{}_{}",
+                order.base_name.to_lowercase(),
+                order.quote_name.to_lowercase()
+            )
+            .into(),
+            side,
+            order_type: order.order_type,
+            price: order.price,
+            quote_qty: order.quote_qyt,
+            base_qty: order.base_qty,
+        };
+        let body = self
+            .build_payload(market_order)
+            .await?
+            .replace(
+                "quote_qty=",
+                format!("{}=", order.quote_name.to_lowercase()).as_str(),
+            )
+            .replace(
+                "base_qty=",
+                format!("{}=", order.base_name.to_lowercase()).as_str(),
+            );
+
+        let result = self
+            .send_request(
+                &body,
+                &self.private_api_url,
+                RequestType::POST,
+                &self.client,
+            )
+            .await?;
+
+        // check the HTTP response from the server
+        result
+            .error_for_status_ref()
+            .map_err(|e| CustomErr::operation("Failed to send request to Indodax", e))?;
+
+        // convert the response to be a text and then check if it is successfully converted
+        let raw_text = result.text().await.map_err(|e| {
+            CustomErr::operation("Failed to convert Indodax response to a raw text", e)
+        })?;
+
+        let data: IndodaxResponse = serde_json::from_str(&raw_text).map_err(|e| {
+            CustomErr::operation("Failed to convert response to IndodaxResponse", e)
+        })?;
+
+        let returned_data = data
+            .returned_data
+            .as_ref()
+            .ok_or_else(|| CustomErr::operation_ori("Failed to extract data from response"))?;
+
+        let base_key = match order.order_side {
+            Side::BUY => "receive",
+            Side::SELL => "sold",
+        };
+
+        let quote_key = match order.order_side {
+            Side::BUY => "spend",
+            Side::SELL => "receive",
+        };
+
+        let response = TradeResponse {
+            fee_cost: TradeResponse::convert_to_decimal(
+                returned_data
+                    .get("fee")
+                    .ok_or_else(|| CustomErr::operation_ori("Failed to extract fee amount."))?,
+            )
+            .await?,
+            tax_cost: None,
+            base_amount: Some(
+                TradeResponse::convert_to_decimal(
+                    returned_data
+                        .get(format!("{}_{}", base_key, order.base_name.to_lowercase()).as_str())
+                        .ok_or_else(|| {
+                            CustomErr::operation_ori("Failed to extract base currency data")
+                        })?,
+                )
+                .await?,
+            ),
+            quote_amount: Some(
+                TradeResponse::convert_to_decimal(
+                    returned_data
+                        .get(format!("{}_{}", quote_key, order.quote_name.to_lowercase()).as_str())
+                        .ok_or_else(|| {
+                            CustomErr::operation_ori("Failed to extract quote currencty data.")
+                        })?,
+                )
+                .await?,
+            ),
+        };
+
+        Ok(response)
+    }
 }
 
 // this is the specific implementation of Indodax endpoint.
 impl Indodax {
     /// Private getInfo endpoint of Indondax
-    pub async fn priv_get_info(&self) -> Result<Response, CustomErr> {
+    pub async fn private_get_info(&self) -> Result<Response, CustomErr> {
         let (now, recv_window) = self.get_recv_window().await?;
         let body = format!(
             "method=getInfo&timestamp={:?}&recvWindow={:?}",
@@ -128,6 +267,4 @@ impl Indodax {
 
         Ok(result)
     }
-
-    // pub async fn trade(&self, client: Client) ->
 }

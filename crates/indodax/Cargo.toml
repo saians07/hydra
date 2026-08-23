@@ -13,3 +13,5 @@ argus = { workspace = true }
 serde_qs = { workspace = true }
 chrono = { workspace = true }
 secrecy = { workspace = true }
+rust_decimal = { workspace = true }
+serde_json = { workspace = true }
