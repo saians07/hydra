@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use argus::errors::CustomErr;
 use async_trait::async_trait;
 use hydra_core::{
-    market::crypto::{CexMarket, Order, Side, TradeResponse},
+    exchange::crypto::{CexMarket, Order, Side, TradeResponse},
     utils::{RequestType, hmac_512},
 };
 use reqwest::{Client, Response, header::HeaderValue};
