@@ -340,6 +340,7 @@ impl Indodax {
         a.from = current_time
             .checked_sub_days(Days::new(lookback_days))
             .unwrap_or(current_time)
+            .timestamp()
             .to_string()
             .into();
         Ok(a)
