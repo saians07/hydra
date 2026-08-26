@@ -14,7 +14,6 @@ use rust_decimal::Decimal;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use serde_qs::to_string;
 
 #[derive(Debug, Clone)]
 pub struct Indodax {
@@ -279,10 +278,9 @@ impl CexMarket for Indodax {
 
         match json_body.as_array() {
             Some(arr) => {
-                let json_string = to_string(arr)
+                let json_string = serde_json::to_string(arr)
                     .map_err(|e| ArgusErr::operation("Failed to convert into json string", e))?;
 
-                log_info!("The json string: {}", json_string);
                 let df_ohlcv = JsonReader::new(std::io::Cursor::new(json_string))
                     // .with_json_format(JsonFormat::Json)
                     .finish()
@@ -542,55 +540,55 @@ mod tests {
         assert_eq!(recv_window, now - 4000);
     }
 
-    // #[tokio::test]
-    // async fn test_public_fetch_ohlcv_success() {
-    //     let mut server = Server::new_async().await;
-    //     let mock_url = server.url();
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_public_fetch_ohlcv_success() {
+        let mut server = Server::new_async().await;
+        let mock_url = server.url();
 
-    //     // 1. Siapkan Mock Response JSON
-    //     let mock_body = r#"[
-    //             {"Time": 1620000000, "Open": 50000.0, "High": 51000.0, "Low": 49000.0, "Close": 50500.0, "Volume": "1.5"},
-    //             {"Time": 1620003600, "Open": 50500.0, "High": 52000.0, "Low": 50000.0, "Close": 51500.0, "Volume": "2.0"}
-    //         ]"#;
+        // 1. Siapkan Mock Response JSON
+        let mock_body = r#"[
+                {"Time": 1620000000, "Open": 50000.0, "High": 51000.0, "Low": 49000.0, "Close": 50500.0, "Volume": "1.5"},
+                {"Time": 1620003600, "Open": 50500.0, "High": 52000.0, "Low": 50000.0, "Close": 51500.0, "Volume": "2.0"}
+            ]"#;
 
-    //     let mock = server
-    //         .mock(
-    //             "GET",
-    //             mockito::Matcher::Regex(r"^/tradingview/history_v2".into()),
-    //         )
-    //         .with_status(200)
-    //         .with_header("content-type", "application/json")
-    //         .with_body(mock_body)
-    //         .create_async()
-    //         .await;
+        let mock = server
+            .mock(
+                "GET",
+                mockito::Matcher::Regex(r"^/tradingview/history_v2".into()),
+            )
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(mock_body)
+            .create_async()
+            .await;
 
-    //     let indodax = create_test_client(&mock_url, &mock_url);
+        let indodax = create_test_client(&mock_url, &mock_url);
 
-    //     // 2. Siapkan parameter TimeFrame dan TimeRange sesuai Struct asli
-    //     let time_frame = TimeFrame::OneHour;
-    //     let time_range = TimeRange {
-    //         from: Box::from("1620000000"),
-    //         to: Box::from("1620003600"),
-    //     };
+        // 2. Siapkan parameter TimeFrame dan TimeRange sesuai Struct asli
+        let time_frame = TimeFrame::OneHour;
+        let time_range = TimeRange {
+            from: Box::from("1620000000"),
+            to: Box::from("1620003600"),
+        };
 
-    //     // 3. Eksekusi Fungsi
-    //     let df_result = indodax.public_fetch_ohlcv(time_frame, time_range).await;
+        // 3. Eksekusi Fungsi
+        let df_result = indodax.public_fetch_ohlcv(time_frame, time_range).await;
 
-    //     // 4. Verifikasi
-    //     assert!(
-    //         df_result.is_ok(),
-    //         "Gagal memproses DataFrame: {:?}",
-    //         df_result.err()
-    //     );
-    //     let df = df_result.unwrap();
+        // 4. Verifikasi
+        assert!(
+            df_result.is_ok(),
+            "Gagal memproses DataFrame: {:?}",
+            df_result.err()
+        );
+        let df = df_result.unwrap();
 
-    //     assert_eq!(df.height(), 2);
+        assert_eq!(df.height(), 2);
 
-    //     // Memastikan kolom benar-benar direname menjadi lowercase
-    //     let column_names = df.get_column_names();
-    //     assert!(column_names.iter().any(|name| name.as_str() == "open"));
-    //     assert!(column_names.iter().any(|name| name.as_str() == "time"));
+        // Memastikan kolom benar-benar direname menjadi lowercase
+        let column_names = df.get_column_names();
+        assert!(column_names.iter().any(|name| name.as_str() == "open"));
+        assert!(column_names.iter().any(|name| name.as_str() == "time"));
 
-    //     mock.assert_async().await;
-    // }
+        mock.assert_async().await;
+    }
 }
