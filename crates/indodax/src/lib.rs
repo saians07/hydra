@@ -1,16 +1,18 @@
 use std::collections::HashMap;
 
-use argus::errors::CustomErr;
+use argus::errors::ArgusErr;
 use async_trait::async_trait;
 use hydra_core::{
     exchange::crypto::{CexMarket, Order, Side, TradeResponse},
     utils::{RequestType, hmac_512},
 };
+use polars::prelude::*;
 use reqwest::{Client, Response, header::HeaderValue};
 use rust_decimal::Decimal;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use serde_qs::to_string;
 
 #[derive(Debug, Clone)]
 pub struct Indodax {
@@ -77,14 +79,14 @@ impl CexMarket for Indodax {
     async fn build_payload<P: serde::Serialize + Send + Sync + 'static>(
         &self,
         payload: P,
-    ) -> Result<Box<str>, CustomErr> {
+    ) -> Result<Box<str>, ArgusErr> {
         match serde_qs::to_string(&payload) {
             Ok(payload) => return Ok(Box::from(payload)),
-            Err(e) => return Err(CustomErr::operation("Failed to build payload:", e)),
+            Err(e) => return Err(ArgusErr::operation("Failed to build payload:", e)),
         }
     }
 
-    async fn sign_payload(&self, payload: &str) -> Result<Box<str>, CustomErr> {
+    async fn sign_payload(&self, payload: &str) -> Result<Box<str>, ArgusErr> {
         let result = hmac_512(payload, self.secret_key.expose_secret())?;
 
         Ok(Box::from(result))
@@ -92,24 +94,25 @@ impl CexMarket for Indodax {
 
     async fn send_request(
         &self,
-        body: &str,
         url: &str,
         request_type: RequestType,
         client: &Client,
-    ) -> Result<Response, CustomErr> {
+        body: Option<&str>,
+    ) -> Result<Response, ArgusErr> {
         match request_type {
             RequestType::GET => {
                 let result = client
                     .get(url)
                     .send()
                     .await
-                    .map_err(|e| CustomErr::operation("Failed to request data from Indodax", e))?
+                    .map_err(|e| ArgusErr::operation("Failed to request data from Indodax", e))?
                     .error_for_status()
-                    .map_err(|e| CustomErr::operation("Error with status code:", e))?;
+                    .map_err(|e| ArgusErr::operation("Error with status code:", e))?;
 
                 Ok(result)
             }
             RequestType::POST => {
+                let body = body.unwrap_or("");
                 let signed_body = self.sign_payload(body).await?;
                 let result = client
                     .post(url)
@@ -122,16 +125,16 @@ impl CexMarket for Indodax {
                     .body(body.to_owned())
                     .send()
                     .await
-                    .map_err(|e| CustomErr::operation("Failed to request data from Indodax", e))?
+                    .map_err(|e| ArgusErr::operation("Failed to request data from Indodax", e))?
                     .error_for_status()
-                    .map_err(|e| CustomErr::operation("Error with status code:", e))?;
+                    .map_err(|e| ArgusErr::operation("Error with status code:", e))?;
 
                 Ok(result)
             }
         }
     }
 
-    async fn get_recv_window(&self) -> Result<(i64, i64), CustomErr> {
+    async fn get_recv_window(&self) -> Result<(i64, i64), ArgusErr> {
         let now = chrono::Local::now().timestamp_millis();
 
         // this will be deduced with how long the request is valid for
@@ -140,7 +143,7 @@ impl CexMarket for Indodax {
         Ok((now, recv_window))
     }
 
-    async fn private_trade(&self, order: Order) -> Result<TradeResponse, CustomErr> {
+    async fn private_trade(&self, order: Order) -> Result<TradeResponse, ArgusErr> {
         let (now, recv_window) = self.get_recv_window().await?;
         let side: Box<str> = match order.order_side {
             Side::BUY => "buy".into(),
@@ -177,31 +180,30 @@ impl CexMarket for Indodax {
 
         let result = self
             .send_request(
-                &body,
                 &self.private_api_url,
                 RequestType::POST,
                 &self.client,
+                Some(&body),
             )
             .await?;
 
         // check the HTTP response from the server
         result
             .error_for_status_ref()
-            .map_err(|e| CustomErr::operation("Failed to send request to Indodax", e))?;
+            .map_err(|e| ArgusErr::operation("Failed to send request to Indodax", e))?;
 
         // convert the response to be a text and then check if it is successfully converted
         let raw_text = result.text().await.map_err(|e| {
-            CustomErr::operation("Failed to convert Indodax response to a raw text", e)
+            ArgusErr::operation("Failed to convert Indodax response to a raw text", e)
         })?;
 
-        let data: IndodaxResponse = serde_json::from_str(&raw_text).map_err(|e| {
-            CustomErr::operation("Failed to convert response to IndodaxResponse", e)
-        })?;
+        let data: IndodaxResponse = serde_json::from_str(&raw_text)
+            .map_err(|e| ArgusErr::operation("Failed to convert response to IndodaxResponse", e))?;
 
         let returned_data = data
             .returned_data
             .as_ref()
-            .ok_or_else(|| CustomErr::operation_ori("Failed to extract data from response"))?;
+            .ok_or_else(|| ArgusErr::operation_ori("Failed to extract data from response"))?;
 
         let base_key = match order.order_side {
             Side::BUY => "receive",
@@ -222,7 +224,7 @@ impl CexMarket for Indodax {
             fee_cost: TradeResponse::convert_to_decimal(
                 returned_data
                     .get("fee")
-                    .ok_or_else(|| CustomErr::operation_ori("Failed to extract fee amount."))?,
+                    .ok_or_else(|| ArgusErr::operation_ori("Failed to extract fee amount."))?,
             )
             .await?,
             tax_cost: None,
@@ -231,7 +233,7 @@ impl CexMarket for Indodax {
                     returned_data
                         .get(format!("{}_{}", base_key, order.base_name.to_lowercase()).as_str())
                         .ok_or_else(|| {
-                            CustomErr::operation_ori("Failed to extract base currency data")
+                            ArgusErr::operation_ori("Failed to extract base currency data")
                         })?,
                 )
                 .await?,
@@ -241,7 +243,7 @@ impl CexMarket for Indodax {
                     returned_data
                         .get(format!("{}_{}", quote_key, quote_name).as_str())
                         .ok_or_else(|| {
-                            CustomErr::operation_ori("Failed to extract quote currencty data.")
+                            ArgusErr::operation_ori("Failed to extract quote currencty data.")
                         })?,
                 )
                 .await?,
@@ -250,12 +252,55 @@ impl CexMarket for Indodax {
 
         Ok(response)
     }
+
+    async fn public_fetch_ohlcv(&self, url: &str) -> Result<DataFrame, ArgusErr> {
+        let resp = self
+            .send_request(url, RequestType::GET, &self.client, None)
+            .await?;
+
+        let json_body: Value = resp
+            .json()
+            .await
+            .map_err(|e| ArgusErr::operation("Can not parse response from Indodax: ", e))?;
+
+        match json_body.as_array() {
+            Some(arr) => {
+                let json_string =
+                    to_string(arr).map_err(|e| ArgusErr::operation("Failed to ", e))?;
+                let df_ohlcv = JsonReader::new(std::io::Cursor::new(json_string))
+                    .finish()
+                    .map_err(|e| {
+                        ArgusErr::operation("Can not convert Indodax's response to dataframe.", e)
+                    })?
+                    .lazy()
+                    // ensure we have ohlcv instead of OHLCV
+                    .with_columns([
+                        col("Open").cast(DataType::Decimal(30, 10)).alias("open"),
+                        col("High").cast(DataType::Decimal(30, 10)).alias("high"),
+                        col("Low").cast(DataType::Decimal(30, 10)).alias("low"),
+                        col("Close").cast(DataType::Decimal(30, 10)).alias("close"),
+                        col("Volume")
+                            .cast(DataType::Decimal(30, 10))
+                            .alias("volume"),
+                    ])
+                    .with_column((col("Time") * lit(1000)).alias("time"))
+                    .drop(by_name(["Open", "High"], true, false))
+                    .collect()
+                    .map_err(|e| {
+                        ArgusErr::operation("Failed to convert dataframe to be ohlcv", e)
+                    })?;
+                Ok(df_ohlcv)
+            }
+            None => Err(ArgusErr::operation_ori("No content found in the response.")),
+        }
+        // Ok(DataFrame::default())
+    }
 }
 
 // this is the specific implementation of Indodax endpoint.
 impl Indodax {
     /// Private getInfo endpoint of Indondax
-    pub async fn private_get_info(&self) -> Result<Response, CustomErr> {
+    pub async fn private_get_info(&self) -> Result<Response, ArgusErr> {
         let (now, recv_window) = self.get_recv_window().await?;
         let body = format!(
             "method=getInfo&timestamp={:?}&recvWindow={:?}",
@@ -264,10 +309,10 @@ impl Indodax {
 
         let result = self
             .send_request(
-                &body,
                 &self.private_api_url,
                 RequestType::POST,
                 &self.client,
+                Some(&body),
             )
             .await?;
 
