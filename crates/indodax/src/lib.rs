@@ -299,7 +299,11 @@ impl CexMarket for Indodax {
                             .alias("volume"),
                     ])
                     .with_column((col("Time") * lit(1000)).alias("time"))
-                    .drop(by_name(["Open", "High"], true, false))
+                    .drop(by_name(
+                        ["Open", "High", "Low", "Close", "Volume", "Time"],
+                        true,
+                        false,
+                    ))
                     .collect()
                     .map_err(|e| {
                         ArgusErr::operation("Failed to convert dataframe to be ohlcv", e)
