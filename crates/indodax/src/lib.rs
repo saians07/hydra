@@ -2,8 +2,10 @@ use std::collections::HashMap;
 
 use argus::errors::ArgusErr;
 use async_trait::async_trait;
+use chrono::{Days, Local};
 use hydra_core::{
-    exchange::crypto::{CexMarket, Order, Side, TradeResponse},
+    exchange::crypto::{CexMarket, Order, Side, TimeRange, TradeResponse},
+    timeframe::TimeFrame,
     utils::{RequestType, hmac_512},
 };
 use polars::prelude::*;
@@ -253,9 +255,21 @@ impl CexMarket for Indodax {
         Ok(response)
     }
 
-    async fn public_fetch_ohlcv(&self) -> Result<DataFrame, ArgusErr> {
+    async fn public_fetch_ohlcv(
+        &self,
+        timeframe: TimeFrame,
+        timerange: TimeRange,
+    ) -> Result<DataFrame, ArgusErr> {
+        let base_url = format!("{}/tradingview/history_v2?", self.public_api_url);
+        let url = format!(
+            "{}from={}&to={}&tf={}",
+            base_url,
+            timerange.from,
+            timerange.to,
+            timeframe.to_string()
+        );
         let resp = self
-            .send_request(&self.public_api_url, RequestType::GET, &self.client, None)
+            .send_request(&url, RequestType::GET, &self.client, None)
             .await?;
 
         let json_body: Value = resp
@@ -317,5 +331,17 @@ impl Indodax {
             .await?;
 
         Ok(result)
+    }
+
+    pub async fn create_time_range(&self, lookback_days: u64) -> Result<TimeRange, ArgusErr> {
+        let mut a = TimeRange::default();
+        let current_time = Local::now();
+        a.to = current_time.timestamp().to_string().into();
+        a.from = current_time
+            .checked_sub_days(Days::new(lookback_days))
+            .unwrap_or(current_time)
+            .to_string()
+            .into();
+        Ok(a)
     }
 }

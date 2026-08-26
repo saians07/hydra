@@ -8,7 +8,7 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::utils::RequestType;
+use crate::{timeframe::TimeFrame, utils::RequestType};
 
 #[async_trait]
 pub trait CexMarket {
@@ -26,7 +26,11 @@ pub trait CexMarket {
     ) -> Result<Response, ArgusErr>;
     async fn get_recv_window(&self) -> Result<(i64, i64), ArgusErr>;
     async fn private_trade(&self, order: Order) -> Result<TradeResponse, ArgusErr>;
-    async fn public_fetch_ohlcv(&self) -> Result<DataFrame, ArgusErr>;
+    async fn public_fetch_ohlcv(
+        &self,
+        timeframe: TimeFrame,
+        timerange: TimeRange,
+    ) -> Result<DataFrame, ArgusErr>;
 }
 
 // this struct defines what attributes will be available for an assets.
@@ -40,6 +44,12 @@ pub struct Asset {
 pub enum Side {
     BUY,
     SELL,
+}
+
+#[derive(Debug, Default)]
+pub struct TimeRange {
+    pub from: Box<str>,
+    pub to: Box<str>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
