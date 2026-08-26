@@ -279,9 +279,10 @@ impl CexMarket for Indodax {
 
         match json_body.as_array() {
             Some(arr) => {
-                let json_string =
-                    to_string(arr).map_err(|e| ArgusErr::operation("Failed to ", e))?;
+                let json_string = to_string(arr)
+                    .map_err(|e| ArgusErr::operation("Failed to convert into json string", e))?;
                 let df_ohlcv = JsonReader::new(std::io::Cursor::new(json_string))
+                    .with_json_format(JsonFormat::Json)
                     .finish()
                     .map_err(|e| {
                         ArgusErr::operation("Can not convert Indodax's response to dataframe.", e)
