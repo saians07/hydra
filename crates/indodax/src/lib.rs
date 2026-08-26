@@ -266,7 +266,7 @@ impl CexMarket for Indodax {
             base_url,
             timerange.from,
             timerange.to,
-            timeframe.to_string()
+            timeframe.get_period_minutes()
         );
         let resp = self
             .send_request(&url, RequestType::GET, &self.client, None)
