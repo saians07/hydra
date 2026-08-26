@@ -26,7 +26,7 @@ pub trait CexMarket {
     ) -> Result<Response, ArgusErr>;
     async fn get_recv_window(&self) -> Result<(i64, i64), ArgusErr>;
     async fn private_trade(&self, order: Order) -> Result<TradeResponse, ArgusErr>;
-    async fn public_fetch_ohlcv(&self, url: &str) -> Result<DataFrame, ArgusErr>;
+    async fn public_fetch_ohlcv(&self) -> Result<DataFrame, ArgusErr>;
 }
 
 // this struct defines what attributes will be available for an assets.

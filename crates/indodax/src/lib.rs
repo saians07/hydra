@@ -253,9 +253,9 @@ impl CexMarket for Indodax {
         Ok(response)
     }
 
-    async fn public_fetch_ohlcv(&self, url: &str) -> Result<DataFrame, ArgusErr> {
+    async fn public_fetch_ohlcv(&self) -> Result<DataFrame, ArgusErr> {
         let resp = self
-            .send_request(url, RequestType::GET, &self.client, None)
+            .send_request(&self.public_api_url, RequestType::GET, &self.client, None)
             .await?;
 
         let json_body: Value = resp
