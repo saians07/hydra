@@ -17,3 +17,4 @@ hex = { workspace = true }
 sha2 = { workspace = true }
 reqwest = { workspace = true }
 secrecy = { workspace = true }
+polars = { workspace = true }

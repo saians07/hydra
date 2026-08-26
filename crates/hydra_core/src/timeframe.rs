@@ -1,6 +1,6 @@
 use std::{fmt, str::FromStr};
 
-use argus::errors::CustomErr;
+use argus::errors::ArgusErr;
 
 #[derive(Debug, Clone)]
 pub enum TimeFrame {
@@ -28,7 +28,7 @@ impl fmt::Display for TimeFrame {
 }
 
 impl FromStr for TimeFrame {
-    type Err = CustomErr;
+    type Err = ArgusErr;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
@@ -38,7 +38,7 @@ impl FromStr for TimeFrame {
             "One Hour" => Ok(TimeFrame::OneHour),
             "Four Hour" => Ok(TimeFrame::FourHour),
             "One Day" => Ok(TimeFrame::OneDay),
-            _ => Err(CustomErr::operation_ori(format!(
+            _ => Err(ArgusErr::operation_ori(format!(
                 "Failed to convert unknown string: {}",
                 s
             ))),
