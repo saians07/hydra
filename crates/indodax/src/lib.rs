@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use argus::errors::ArgusErr;
+use argus::{errors::ArgusErr, logs::log_info};
 use async_trait::async_trait;
 use chrono::{Days, Local};
 use hydra_core::{
@@ -275,14 +275,16 @@ impl CexMarket for Indodax {
         let json_body: Value = resp
             .json()
             .await
-            .map_err(|e| ArgusErr::operation("Can not parse response from Indodax: ", e))?;
+            .map_err(|e| ArgusErr::operation("Could not parse response from Indodax", e))?;
 
         match json_body.as_array() {
             Some(arr) => {
                 let json_string = to_string(arr)
                     .map_err(|e| ArgusErr::operation("Failed to convert into json string", e))?;
+
+                log_info!("The json string: {}", json_string);
                 let df_ohlcv = JsonReader::new(std::io::Cursor::new(json_string))
-                    .with_json_format(JsonFormat::Json)
+                    // .with_json_format(JsonFormat::Json)
                     .finish()
                     .map_err(|e| {
                         ArgusErr::operation("Can not convert Indodax's response to dataframe.", e)
@@ -346,4 +348,249 @@ impl Indodax {
             .into();
         Ok(a)
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mockito::Server;
+    use reqwest::Client;
+    use serde::Serialize;
+
+    // Ensure that the url will come from our tokio server mock
+    fn create_test_client(public_url: &str, private_url: &str) -> Indodax {
+        Indodax {
+            id: Box::from("indodax"),
+            name: Box::from("INDODAX"),
+            api_key: SecretString::new("dummy_api_key".into()),
+            secret_key: SecretString::new("dummy_secret_key".into()),
+            private_api_url: private_url.into(),
+            public_api_url: public_url.into(),
+            private_ws_url: "".into(),
+            public_ws_url: "".into(),
+            client: Client::new(),
+        }
+    }
+
+    #[derive(Serialize)]
+    struct DummyPayload {
+        method: String,
+        pair: String,
+    }
+
+    #[tokio::test]
+    async fn test_private_get_info() {
+        let mut server = Server::new_async().await;
+        let mock_url = server.url();
+
+        let mock = server
+            .mock("POST", "/")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"success": 1, "return": {"balance": {"btc": 1}}}"#)
+            .create_async()
+            .await;
+
+        let indodax = create_test_client(&mock_url, &mock_url);
+
+        let response = indodax.private_get_info().await;
+
+        assert!(response.is_ok());
+        let res = response.unwrap();
+        assert_eq!(res.status(), 200);
+        mock.assert_async().await; // Ensure the mock is trully called
+    }
+
+    #[tokio::test]
+    async fn test_create_time_range() {
+        // test if the difference between the from and to of the TimeRange
+        // is equal to and greater than 7 days (604800) and less than two second
+        // from 604800
+        let indodax = create_test_client("http://dummy", "http://dummy");
+
+        let lookback_days = 7;
+        let time_range = indodax.create_time_range(lookback_days).await.unwrap();
+
+        let from_ts: i64 = time_range.from.parse().unwrap();
+        let to_ts: i64 = time_range.to.parse().unwrap();
+
+        // With lookback 7 days = 7 * 24 * 60 * 60 = 604800 seconds
+        // Gives 1-2 seconds tolerance due to execution delay
+        let diff = to_ts - from_ts;
+        assert!(
+            diff >= 604800 && diff <= 604802,
+            "Difference not as expected: {}",
+            diff
+        );
+    }
+
+    #[tokio::test]
+    async fn test_build_payload() {
+        let indodax = create_test_client("http://dummy", "http://dummy");
+
+        let payload = DummyPayload {
+            method: "trade".to_string(),
+            pair: "btc_idr".to_string(),
+        };
+
+        let result = indodax.build_payload(payload).await.unwrap();
+
+        // Ensure the serde_qs can successfully format the struct to be form-urlencoded
+        assert_eq!(result.as_ref(), "method=trade&pair=btc_idr");
+    }
+
+    #[tokio::test]
+    async fn test_sign_payload() {
+        let body = "halo";
+        let mut indodax = create_test_client("http://dummy", "http://dummy");
+        indodax.secret_key = "123".into();
+
+        assert_eq!(
+            indodax.sign_payload(body).await.unwrap(),
+            Box::from(
+                "b63f4bbf2898cc5a279dd3cd96722ca0977e545ad3bd09a63b63fdc361cf776eda1dd97fdb444a0c4c230333897302aa79ea6b029c07e58763f0b62f487e1da6"
+            )
+        )
+    }
+
+    #[tokio::test]
+    async fn test_send_request_get_ok() {
+        let mut server = Server::new_async().await;
+        let mock_url = server.url();
+
+        let mock = server.mock("GET", "/test-error").create_async().await;
+
+        let indodax = create_test_client(&mock_url, &mock_url);
+        let url = format!("{}/test-error", mock_url);
+
+        let response = indodax
+            .send_request(&url, RequestType::GET, &indodax.client, None)
+            .await;
+
+        assert!(response.is_ok());
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn test_send_request_post_ok() {
+        let mut server = Server::new_async().await;
+        let mock_url = server.url();
+
+        let mock = server.mock("POST", "/test-error").create_async().await;
+
+        let indodax = create_test_client(&mock_url, &mock_url);
+        let url = format!("{}/test-error", mock_url);
+
+        let response = indodax
+            .send_request(&url, RequestType::POST, &indodax.client, None)
+            .await;
+
+        assert!(response.is_ok());
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn test_send_request_get_error_400() {
+        let mut server = Server::new_async().await;
+        let mock_url = server.url();
+
+        let mock = server
+            .mock("GET", "/test-error")
+            .with_status(400)
+            .create_async()
+            .await;
+
+        let indodax = create_test_client(&mock_url, &mock_url);
+        let url = format!("{}/test-error", mock_url);
+
+        let response = indodax
+            .send_request(&url, RequestType::GET, &indodax.client, None)
+            .await;
+
+        assert!(response.is_err());
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn test_send_request_post_error_401() {
+        let mut server = Server::new_async().await;
+        let mock_url = server.url();
+
+        let mock = server
+            .mock("POST", "/test-error")
+            .with_status(401)
+            .create_async()
+            .await;
+
+        let indodax = create_test_client(&mock_url, &mock_url);
+        let url = format!("{}/test-error", mock_url);
+
+        let response = indodax
+            .send_request(&url, RequestType::POST, &indodax.client, None)
+            .await;
+
+        assert!(response.is_err());
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn test_get_recv_window() {
+        // testing if recv_window is exactly now - 4000
+        let indodax = create_test_client("http://dummy", "http://dummy");
+        let (now, recv_window) = indodax.get_recv_window().await.unwrap();
+
+        assert_eq!(recv_window, now - 4000);
+    }
+
+    // #[tokio::test]
+    // async fn test_public_fetch_ohlcv_success() {
+    //     let mut server = Server::new_async().await;
+    //     let mock_url = server.url();
+
+    //     // 1. Siapkan Mock Response JSON
+    //     let mock_body = r#"[
+    //             {"Time": 1620000000, "Open": 50000.0, "High": 51000.0, "Low": 49000.0, "Close": 50500.0, "Volume": "1.5"},
+    //             {"Time": 1620003600, "Open": 50500.0, "High": 52000.0, "Low": 50000.0, "Close": 51500.0, "Volume": "2.0"}
+    //         ]"#;
+
+    //     let mock = server
+    //         .mock(
+    //             "GET",
+    //             mockito::Matcher::Regex(r"^/tradingview/history_v2".into()),
+    //         )
+    //         .with_status(200)
+    //         .with_header("content-type", "application/json")
+    //         .with_body(mock_body)
+    //         .create_async()
+    //         .await;
+
+    //     let indodax = create_test_client(&mock_url, &mock_url);
+
+    //     // 2. Siapkan parameter TimeFrame dan TimeRange sesuai Struct asli
+    //     let time_frame = TimeFrame::OneHour;
+    //     let time_range = TimeRange {
+    //         from: Box::from("1620000000"),
+    //         to: Box::from("1620003600"),
+    //     };
+
+    //     // 3. Eksekusi Fungsi
+    //     let df_result = indodax.public_fetch_ohlcv(time_frame, time_range).await;
+
+    //     // 4. Verifikasi
+    //     assert!(
+    //         df_result.is_ok(),
+    //         "Gagal memproses DataFrame: {:?}",
+    //         df_result.err()
+    //     );
+    //     let df = df_result.unwrap();
+
+    //     assert_eq!(df.height(), 2);
+
+    //     // Memastikan kolom benar-benar direname menjadi lowercase
+    //     let column_names = df.get_column_names();
+    //     assert!(column_names.iter().any(|name| name.as_str() == "open"));
+    //     assert!(column_names.iter().any(|name| name.as_str() == "time"));
+
+    //     mock.assert_async().await;
+    // }
 }

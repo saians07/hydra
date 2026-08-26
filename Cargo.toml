@@ -13,6 +13,7 @@ authors = ["Suberlin Sinaga<suberlinsinaga@gmail.com>"]
 argus = { git = "ssh://git@github.com/saians07/argus.git", branch = "master" , features = ["errors", "logs"]}
 async-trait = "0.1.92"
 anyhow = "1.0.104"
+mockito = "1.7.2"
 serde = "1.0.229"
 rust_decimal = "1.42.1"
 reqwest = { version = "0.13.4", features = ["json"] }

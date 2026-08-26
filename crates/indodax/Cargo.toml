@@ -16,3 +16,5 @@ secrecy = { workspace = true }
 rust_decimal = { workspace = true }
 serde_json = { workspace = true }
 polars = { workspace = true }
+mockito = { workspace = true }
+tokio = "1.53.1"
