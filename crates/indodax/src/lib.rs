@@ -268,9 +268,9 @@ impl CexMarket for Indodax {
         asset: &Asset,
     ) -> Result<DataFrame, ArgusErr> {
         let symbol = format!(
-            "{}_{}",
-            asset.base_name.to_lowercase(),
-            asset.quote_name.to_lowercase()
+            "{}{}",
+            asset.base_name.to_uppercase(),
+            asset.quote_name.to_uppercase()
         );
         let base_url = format!("{}/tradingview/history_v2?", self.public_api_url);
         let url = format!(
