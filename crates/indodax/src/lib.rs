@@ -297,11 +297,24 @@ impl CexMarket for Indodax {
                     .lazy()
                     // ensure we have ohlcv instead of OHLCV
                     .with_columns([
-                        col("Open").cast(DataType::Decimal(30, 10)).alias("open"),
-                        col("High").cast(DataType::Decimal(30, 10)).alias("high"),
-                        col("Low").cast(DataType::Decimal(30, 10)).alias("low"),
-                        col("Close").cast(DataType::Decimal(30, 10)).alias("close"),
+                        col("Open")
+                            .cast(DataType::Float64)
+                            .cast(DataType::Decimal(30, 10))
+                            .alias("open"),
+                        col("High")
+                            .cast(DataType::Float64)
+                            .cast(DataType::Decimal(30, 10))
+                            .alias("high"),
+                        col("Low")
+                            .cast(DataType::Float64)
+                            .cast(DataType::Decimal(30, 10))
+                            .alias("low"),
+                        col("Close")
+                            .cast(DataType::Float64)
+                            .cast(DataType::Decimal(30, 10))
+                            .alias("close"),
                         col("Volume")
+                            .cast(DataType::Float64)
                             .cast(DataType::Decimal(30, 10))
                             .alias("volume"),
                     ])
