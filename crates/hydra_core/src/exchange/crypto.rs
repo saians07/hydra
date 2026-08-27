@@ -30,6 +30,7 @@ pub trait CexMarket {
         &self,
         timeframe: TimeFrame,
         timerange: TimeRange,
+        asset: &Asset,
     ) -> Result<DataFrame, ArgusErr>;
 }
 

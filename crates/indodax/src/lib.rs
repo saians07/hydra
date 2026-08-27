@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use chrono::{Days, Local};
 use hydra_core::{
     balance::{Balance, BalanceType},
-    exchange::crypto::{CexMarket, Order, Side, TimeRange, TradeResponse},
+    exchange::crypto::{Asset, CexMarket, Order, Side, TimeRange, TradeResponse},
     timeframe::TimeFrame,
     utils::{RequestType, hmac_512},
 };
@@ -265,11 +265,16 @@ impl CexMarket for Indodax {
         &self,
         timeframe: TimeFrame,
         timerange: TimeRange,
+        asset: &Asset,
     ) -> Result<DataFrame, ArgusErr> {
+        let symbol = format!(
+            "{}_{}",
+            asset.base_name.to_lowercase(),
+            asset.quote_name.to_lowercase()
+        );
         let base_url = format!("{}/tradingview/history_v2?", self.public_api_url);
         let url = format!(
-            "{}from={}&to={}&tf={}",
-            base_url,
+            "{base_url}symbol={symbol}&from={}&to={}&tf={}",
             timerange.from,
             timerange.to,
             timeframe.get_period_minutes()
@@ -663,9 +668,13 @@ mod tests {
             from: Box::from("1620000000"),
             to: Box::from("1620003600"),
         };
-
-        // 3. Eksekusi Fungsi
-        let df_result = indodax.public_fetch_ohlcv(time_frame, time_range).await;
+        let asset = Asset {
+            base_name: "ETH".into(),
+            quote_name: "IDR".into(),
+        };
+        let df_result = indodax
+            .public_fetch_ohlcv(time_frame, time_range, &asset)
+            .await;
 
         // 4. Verifikasi
         assert!(
