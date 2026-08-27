@@ -436,6 +436,7 @@ mod tests {
     use mockito::Server;
     use reqwest::Client;
     use rust_decimal::prelude::FromPrimitive;
+    use rust_decimal::prelude::*;
     use serde::Serialize;
 
     // Ensure that the url will come from our tokio server mock
@@ -639,7 +640,7 @@ mod tests {
 
         // 1. Siapkan Mock Response JSON
         let mock_body = r#"[
-                {"Time": 1620000000, "Open": 50000.0, "High": 51000.0, "Low": 49000.0, "Close": 50500.0, "Volume": "1.5"},
+                {"Time": 1620000000, "Open": 50000.0, "High": 51000.0, "Low": 49000.0, "Close": 50500.0, "Volume": "0.0002"},
                 {"Time": 1620003600, "Open": 50500.0, "High": 52000.0, "Low": 50000.0, "Close": 51500.0, "Volume": "2.0"}
             ]"#;
 
@@ -676,10 +677,21 @@ mod tests {
 
         assert_eq!(df.height(), 2);
 
-        // Memastikan kolom benar-benar direname menjadi lowercase
+        let data_decimal: [Decimal; 2] = [Decimal::new(2, 4), Decimal::new(2000, 3)];
+
+        let float_vec: Vec<f64> = data_decimal
+            .iter()
+            .map(|d| d.to_f64().unwrap_or(0.0))
+            .collect();
+
+        let col = Column::new("volume".into(), float_vec)
+            .cast(&DataType::Decimal(30 as usize, 10 as usize))
+            .unwrap();
+
         let column_names = df.get_column_names();
         assert!(column_names.iter().any(|name| name.as_str() == "open"));
         assert!(column_names.iter().any(|name| name.as_str() == "time"));
+        assert_eq!(df.column("volume").unwrap(), &col);
 
         mock.assert_async().await;
     }
