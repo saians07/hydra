@@ -3,19 +3,18 @@ use std::{collections::HashMap, fmt::Display, str::FromStr};
 use argus::errors::ArgusErr;
 use async_trait::async_trait;
 use rust_decimal::Decimal;
+use serde::Deserialize;
 
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Debug, Default, Clone, PartialEq, Deserialize)]
 pub struct Balance {
     pub available: Decimal,
     pub locked: Decimal,
-    pub frozen: Decimal,
 }
 
 impl Display for Balance {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "available: {}\n", self.available)?;
-        write!(f, "locked: {}\n", self.locked)?;
-        write!(f, "frozen: {}\n", self.frozen)
+        write!(f, "locked: {}\n", self.locked)
     }
 }
 

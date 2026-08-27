@@ -1,9 +1,15 @@
+/*
+ * Indodax main library
+ * author: Suberlin Sinaga
+ */
+
 use std::collections::HashMap;
 
 use argus::errors::ArgusErr;
 use async_trait::async_trait;
 use chrono::{Days, Local};
 use hydra_core::{
+    balance::{Balance, BalanceType},
     exchange::crypto::{CexMarket, Order, Side, TimeRange, TradeResponse},
     timeframe::TimeFrame,
     utils::{RequestType, hmac_512},
@@ -254,6 +260,7 @@ impl CexMarket for Indodax {
         Ok(response)
     }
 
+    /// Fetch OHLCV data from market server
     async fn public_fetch_ohlcv(
         &self,
         timeframe: TimeFrame,
@@ -319,7 +326,7 @@ impl CexMarket for Indodax {
 // this is the specific implementation of Indodax endpoint.
 impl Indodax {
     /// Private getInfo endpoint of Indondax
-    pub async fn private_get_info(&self) -> Result<Response, ArgusErr> {
+    pub async fn private_get_info(&self) -> Result<BalanceType, ArgusErr> {
         let (now, recv_window) = self.get_recv_window().await?;
         let body = format!(
             "method=getInfo&timestamp={:?}&recvWindow={:?}",
@@ -335,7 +342,65 @@ impl Indodax {
             )
             .await?;
 
-        Ok(result)
+        let account_info = result.json::<IndodaxResponse>().await.map_err(|e| {
+            ArgusErr::operation(
+                "Failed to convert Indodax's account info ro Indodax general response.",
+                e,
+            )
+        })?;
+
+        let balance_value = account_info
+            .clone()
+            .returned_data
+            .unwrap()
+            .get("balance")
+            .ok_or_else(|| ArgusErr::operation_ori("Failed to extract Indodax balance"))?
+            .to_owned();
+
+        let locked_value = account_info
+            .returned_data
+            .unwrap()
+            .get("balance_hold")
+            .ok_or_else(|| ArgusErr::operation_ori("Failed to extract Indodax balance"))?
+            .as_object()
+            .ok_or_else(|| {
+                ArgusErr::operation_ori(
+                    "Failed to convert Indodax locked balance &Value to an object",
+                )
+            })?
+            .to_owned();
+
+        let balance = balance_value
+            .as_object()
+            .ok_or_else(|| {
+                ArgusErr::operation_ori("Failed to convert Indodax balance &Value to an object")
+            })?
+            .into_iter()
+            .map(|(key, value)| {
+                let mut final_balance = Balance::default();
+                let balance = serde_json::from_value(value.clone()).map_err(|e| {
+                    ArgusErr::operation(
+                        "Failed to convert Indodax json balance Value to be Balance",
+                        e,
+                    )
+                })?;
+                final_balance.available = balance;
+
+                if let Some(locked_val) = locked_value.get(key) {
+                    let locked_bal = serde_json::from_value(locked_val.clone()).map_err(|e| {
+                        ArgusErr::operation(
+                            "Failed to convert Indodax json locked Value to be Balance",
+                            e,
+                        )
+                    })?;
+                    final_balance.locked = locked_bal;
+                }
+
+                Ok((key.clone(), final_balance))
+            })
+            .collect::<Result<HashMap<String, Balance>, ArgusErr>>()?;
+
+        Ok(BalanceType(balance))
     }
 
     pub async fn create_time_range(&self, lookback_days: u64) -> Result<TimeRange, ArgusErr> {
@@ -357,6 +422,7 @@ mod tests {
     use super::*;
     use mockito::Server;
     use reqwest::Client;
+    use rust_decimal::prelude::FromPrimitive;
     use serde::Serialize;
 
     // Ensure that the url will come from our tokio server mock
@@ -389,7 +455,9 @@ mod tests {
             .mock("POST", "/")
             .with_status(200)
             .with_header("content-type", "application/json")
-            .with_body(r#"{"success": 1, "return": {"balance": {"btc": 1}}}"#)
+            .with_body(
+                r#"{"success": 1, "return": {"balance": {"btc": 1}, "balance_hold": {"idr": 0}}}"#,
+            )
             .create_async()
             .await;
 
@@ -397,9 +465,16 @@ mod tests {
 
         let response = indodax.private_get_info().await;
 
-        assert!(response.is_ok());
+        // assert!(response.is_ok());
         let res = response.unwrap();
-        assert_eq!(res.status(), 200);
+        assert_eq!(
+            res.0.get("btc").unwrap_or(&Balance::default()).available,
+            Decimal::from_i32(1).unwrap_or_default()
+        );
+        assert_eq!(
+            res.0.get("idr").unwrap_or(&Balance::default()).locked,
+            Decimal::from_i32(0).unwrap_or_default()
+        );
         mock.assert_async().await; // Ensure the mock is trully called
     }
 

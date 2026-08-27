@@ -84,7 +84,7 @@ dependencies = [
 [[package]]
 name = "argus"
 version = "0.1.0"
-source = "git+ssh://git@github.com/saians07/argus.git?branch=master#0a9728d88aa50a72d6be7005168441e1b12f98d3"
+source = "git+ssh://git@github.com/saians07/argus.git?branch=master#1c1671a0fefd9dec32701638330910c5cf148667"
 dependencies = [
  "errors",
  "logs",
@@ -840,7 +840,7 @@ dependencies = [
 [[package]]
 name = "errors"
 version = "0.1.0"
-source = "git+ssh://git@github.com/saians07/argus.git?branch=master#0a9728d88aa50a72d6be7005168441e1b12f98d3"
+source = "git+ssh://git@github.com/saians07/argus.git?branch=master#1c1671a0fefd9dec32701638330910c5cf148667"
 dependencies = [
  "serde",
  "thiserror",
@@ -1698,7 +1698,7 @@ checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
 [[package]]
 name = "logs"
 version = "0.1.0"
-source = "git+ssh://git@github.com/saians07/argus.git?branch=master#0a9728d88aa50a72d6be7005168441e1b12f98d3"
+source = "git+ssh://git@github.com/saians07/argus.git?branch=master#1c1671a0fefd9dec32701638330910c5cf148667"
 dependencies = [
  "chrono",
  "tracing",
@@ -1830,7 +1830,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3313,7 +3313,7 @@ dependencies = [
 [[package]]
 name = "schedulers"
 version = "0.1.0"
-source = "git+ssh://git@github.com/saians07/argus.git?branch=master#0a9728d88aa50a72d6be7005168441e1b12f98d3"
+source = "git+ssh://git@github.com/saians07/argus.git?branch=master#1c1671a0fefd9dec32701638330910c5cf148667"
 dependencies = [
  "async-trait",
  "tokio-cron-scheduler",
