@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use argus::{errors::ArgusErr, logs::log_info};
+use argus::errors::ArgusErr;
 use async_trait::async_trait;
 use chrono::{Days, Local};
 use hydra_core::{

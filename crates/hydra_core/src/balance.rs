@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use rust_decimal::Decimal;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct Balance {
     pub available: Decimal,
     pub locked: Decimal,
