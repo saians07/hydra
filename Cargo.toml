@@ -5,7 +5,7 @@ edition = "2024"
 authors = ["Suberlin Sinaga<suberlinsinaga@gmail.com>"]
 
 [dependencies]
-argus = { git = "ssh://git@github.com/saians07/argus.git", branch = "master" , features = ["errors", "logs"]}
+argus = { path = "../argus/crates/argus", features = ["logs", "errors"] }
 async-trait = "0.1.92"
 anyhow = "1.0.104"
 mockito = "1.7.2"
@@ -19,7 +19,7 @@ hex = "0.4.3"
 sha2 = "0.11.0"
 chrono = { version = "0.4.45", features = ["serde"] }
 secrecy = { version = "0.10.3", features = ["serde"] }
-polars = { version = "0.54.4", features = ["lazy", "json", "dtype-decimal", "diff", "abs", "strings"] }
+polars = { version = "0.55.2", features = ["lazy", "json", "dtype-decimal", "diff", "abs", "strings"] }
 tokio.workspace = true
 
 [features]
