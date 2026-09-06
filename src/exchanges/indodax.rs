@@ -62,7 +62,7 @@ impl Indodax {
     pub fn new(api_key: SecretString, secret_key: SecretString, client: Client) -> Self {
         Self {
             id: "indodax".into(),
-            name: "INDODAX".into(),
+            name: "Indodax".into(),
             api_key,
             secret_key,
             private_api_url: "https://indodax.com/tapi".into(),
