@@ -25,7 +25,6 @@ serde_with = "3.24.0"
 
 [features]
 binance = []
-safe_trade = []
 
 [profile.dev]
 debug = "line-tables-only"
