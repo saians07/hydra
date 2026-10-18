@@ -26,12 +26,12 @@ pub trait DataStream {
 
 #[async_trait]
 pub trait DataFetch {
-    async fn public_fetch_order_book(&self, pair: Pair) -> Result<OrderBook, ArgusErr>;
+    async fn public_fetch_order_book(&self, pair: &Pair) -> Result<OrderBook, ArgusErr>;
     async fn public_fetch_ohlcv(
         &self,
         time_frame: TimeFrame,
         time_range: TimeRange,
-        pair: Pair,
+        pair: &Pair,
     ) -> Result<DataFrame, ArgusErr>;
     // async fn public_fetch_recent_market_trades(&self) -> Result<(), ()>;
     // async fn private_fetch_trades(&self) -> Result<(), ()>;
