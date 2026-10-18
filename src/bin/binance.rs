@@ -20,40 +20,77 @@
 
 #[cfg(feature = "binance")]
 use argus::errors::ArgusErr;
+use hydra::{api::wallet::Balances, core::utils::OrderBook};
 #[cfg(feature = "binance")]
 use hydra::{
-    api::{data::DataFetch, wallet::Wallet},
-    core::utils::Pair,
+    api::{data::DataFetch, spot::Spot, wallet::Wallet},
+    core::utils::{OrderRequest, OrderSide, OrderStatus, OrderType, Pair},
     exchanges::binance::Binance,
 };
 
 #[cfg(feature = "binance")]
 #[tokio::main]
 async fn main() -> Result<(), ArgusErr> {
+    // use rust_decimal::{Decimal, prelude::*};
     let binance = Binance::new(
         "z7gkd0DqdGj5bAa8ahpFZjcShUO1KIZc0Zikvf6qdBtBY0VR1SWOQijtqlwbXA9T".into(),
         "bEfXGDdcQxNddz3Onxi7E3yBXP3AXhJ9CnFjOosXHl7h0SFk3bSkZpMyWXkwRHcr".into(),
     );
-    // let pairs = vec![Pair {
-    //     base: "BTC".to_string(),
-    //     quote: "USDT".to_string(),
-    // }];
+    let mut markets: Vec<Market> = Vec::new();
+    markets.push(Market::Binance(binance));
+    let mut pairs: Vec<Pair> = Vec::new();
+
     // binance.private_fetch_account_information().await?;
-    let pair = Pair {
-        base: "BTC".to_string(),
-        quote: "USDT".to_string(),
-    };
-    let a = binance.private_fetch_balances().await?;
-    let ob = binance.public_fetch_order_book(pair.clone()).await?;
-    let ohlcv = binance
-        .public_fetch_ohlcv(
-            hydra::core::utils::TimeFrame::OneHour,
-            hydra::core::utils::TimeRange::new(Some(chrono::Local::now()), 4u64)?,
-            pair,
-        )
-        .await?;
-    // println!("The USDT Balances are: {:#?}", a.0.read().await);
-    // println!("The order book is: {:#?}", ob);
-    println!("The OHLCV is: {:#?}", ohlcv.head(Some(4)));
+    let btc_usdt = Pair::new("BTC".into(), "USDT".into());
+    pairs.push(btc_usdt);
+
+    for market in &markets {
+        for pair in &pairs {
+            let a = market.private_fetch_balances().await?;
+            println!("The balance is {:#?}", a);
+
+            let ob = market.public_fetch_order_book(pair).await?;
+            println!("The orderbook is {:#?}", ob);
+        }
+    }
+    // let ohlcv = binance
+    //     .public_fetch_ohlcv(
+    //         hydra::core::utils::TimeFrame::OneHour,
+    //         hydra::core::utils::TimeRange::new(Some(chrono::Local::now()), 4u64)?,
+    //         pair.clone(),
+    //     )
+    //     .await?;
+    // println!("The OHLCV is: {:#?}", ohlcv.head(Some(4)));
+    // let ord = OrderRequest {
+    //     pair: pair,
+    //     market_id: binance.id.clone(),
+    //     base_amount: Decimal::from_f64(0.00009),
+    //     order_type: OrderType::TAKER,
+    //     order_side: OrderSide::BUY,
+    //     order_status: OrderStatus::Open,
+    //     client_order_id: 12345.into(),
+    //     expected_price: None,
+    //     quote_amount: None,
+    // };
+    // let resp = binance.private_send_order(ord.clone()).await?;
+    // println!("The order response: {:#?}", resp);
     Ok(())
+}
+
+enum Market {
+    Binance(Binance),
+}
+
+impl Market {
+    pub async fn private_fetch_balances(&self) -> Result<Balances, ArgusErr> {
+        match self {
+            Market::Binance(b) => b.private_fetch_balances().await,
+        }
+    }
+
+    pub async fn public_fetch_order_book(&self, pair: &Pair) -> Result<OrderBook, ArgusErr> {
+        match self {
+            Market::Binance(b) => b.public_fetch_order_book(pair).await,
+        }
+    }
 }
