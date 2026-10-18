@@ -5,7 +5,7 @@
 use argus::errors::ArgusErr;
 use async_trait::async_trait;
 
-use crate::core::utils::{Order, OrderSide, OrderType};
+use crate::core::utils::{OrderRequest, OrderResponse};
 
 #[async_trait]
 pub trait Spot {
@@ -18,10 +18,5 @@ pub trait Spot {
     /// or you want to buy.
     /// Since, each market might have different order parameters and it is difficult to
     /// use variadic in rust, we catch all possible paramters under Order struct.
-    async fn private_send_order(
-        &self,
-        order_type: OrderType,
-        order_side: OrderSide,
-        order: Order,
-    ) -> Result<bool, ArgusErr>;
+    async fn private_send_order(&self, order: OrderRequest) -> Result<OrderResponse, ArgusErr>;
 }
