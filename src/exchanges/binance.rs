@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{fmt::Display, str::FromStr};
 
 use argus::errors::ArgusErr;
 use async_trait::async_trait;
@@ -21,10 +21,12 @@ use crate::{
         wallet::{Balance, Balances, Wallet},
     },
     core::utils::{
-        Hasher, Order, OrderBook, OrderSide, OrderType, Pair, RequestType, TimeFrame, TimeRange,
+        Hasher, OrderBook, OrderRequest, OrderResponse, Pair, RequestType, TimeFrame, TimeRange,
+        generate_request_body,
     },
 };
 
+#[derive(Debug, Clone)]
 pub struct Binance {
     pub id: Box<str>,
     pub name: Box<str>,
@@ -57,12 +59,9 @@ impl Request for Binance {
         headers: HeaderMap,
         need_signed: bool,
     ) -> Result<T, ArgusErr> {
-        let mut full_url = format!("{}?{}", endpoint, query.unwrap_or(""));
-
-        // println!("Full URL: {}", &full_url);
-
         match request_type {
             RequestType::GET => {
+                let mut full_url = format!("{}?{}", endpoint, query.unwrap_or(""));
                 if need_signed {
                     let signed_query = self.sign_request(query.unwrap()).await?;
                     full_url = full_url + format!("&signature={}", signed_query).as_str();
@@ -86,19 +85,22 @@ impl Request for Binance {
                 Ok(result)
             }
             RequestType::POST => {
+                let mut full_body = String::from("");
                 if need_signed {
                     let signed_body = self.sign_request(body.unwrap()).await?;
-                    full_url = full_url + format!("signature={}", signed_body).as_str();
+                    full_body =
+                        full_body + format!("{}&signature={}", body.unwrap(), signed_body).as_str();
                 }
 
-                println!("Full URL: {}", &full_url);
+                println!("The full body: {}", &full_body);
+
                 let result = self
                     .client
-                    .post(full_url)
+                    .post(endpoint)
                     .header("Content-Type", "application/json")
                     .header("Accept", "application/json")
                     .headers(headers)
-                    .body(body.unwrap_or("").to_string());
+                    .body(full_body);
 
                 let res = result
                     .send()
@@ -146,7 +148,7 @@ impl Account for Binance {
 
 #[async_trait]
 impl DataFetch for Binance {
-    async fn public_fetch_order_book(&self, pair: Pair) -> Result<OrderBook, ArgusErr> {
+    async fn public_fetch_order_book(&self, pair: &Pair) -> Result<OrderBook, ArgusErr> {
         let endpoint = format!("{}{}", self.public_api_url, "/api/v3/depth");
         let headers = HeaderMap::new();
         let symbol = format!("symbol={}{}", pair.base, pair.quote);
@@ -169,7 +171,7 @@ impl DataFetch for Binance {
         &self,
         time_frame: TimeFrame,
         time_range: TimeRange,
-        pair: Pair,
+        pair: &Pair,
     ) -> Result<DataFrame, ArgusErr> {
         let endpoint = format!("{}{}", self.public_api_url, "/api/v3/klines");
         let headers = HeaderMap::new();
@@ -248,12 +250,7 @@ impl Exchange for Binance {
 
 #[async_trait]
 impl Spot for Binance {
-    async fn private_send_order(
-        &self,
-        order_type: OrderType,
-        order_side: OrderSide,
-        order: Order,
-    ) -> Result<bool, ArgusErr> {
+    async fn private_send_order(&self, order: OrderRequest) -> Result<OrderResponse, ArgusErr> {
         let endpoint = format!("{}{}", self.private_api_url, "/api/v3/order");
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -264,9 +261,41 @@ impl Spot for Binance {
             "X-MBX-APIKEY",
             self.api_key.expose_secret().parse().unwrap(),
         );
-        let payload = format!("symbol={}", order.pair);
+        let order_data = BinanceOrderRequest {
+            symbol: format!("{}{}", order.pair.base.clone(), order.pair.quote.clone()).into(),
+            side: order.order_side.to_string(),
+            order_type: order.order_type.to_string(),
+            timestamp: chrono::Local::now().timestamp_millis(),
+            quantity: order.base_amount,
+            quote_order_quantity: order.quote_amount,
+            price: order.expected_price,
+            ..Default::default()
+        };
 
-        Err(ArgusErr::BADREQUEST)
+        let payload = generate_request_body(order_data).await?;
+
+        let binance_resp = self
+            .send_request::<BinanceOrderResponse>(
+                &endpoint,
+                RequestType::POST,
+                Some(&payload.to_string()),
+                None,
+                headers,
+                true,
+            )
+            .await?;
+
+        let order_resp = OrderResponse {
+            pair: order.pair,
+            order_id: binance_resp.order_id,
+            market_id: self.id.clone(),
+            order_type: order.order_type,
+            order_side: order.order_side,
+            trade_id: binance_resp.fills.iter().map(|x| x.trade_id).collect(),
+            client_order_id: order.client_order_id,
+        };
+
+        Ok(order_resp)
     }
 }
 
@@ -286,8 +315,8 @@ impl Wallet for Binance {
 impl Binance {
     pub fn new(api_key: SecretString, secret_key: SecretString) -> Self {
         Self {
-            id: "gate".into(),
-            name: "Gate".into(),
+            id: "binance".into(),
+            name: "Binance".into(),
             api_key,
             secret_key,
             api_url_testing: None,
@@ -373,6 +402,114 @@ struct BNBAccountInfo {
     permissions: Vec<String>,
 }
 
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct BinanceOrderRequest {
+    symbol: Box<str>,
+    side: String,
+    #[serde(rename = "type")]
+    order_type: String,
+    timestamp: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    quantity: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    quote_order_quantity: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    price: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    trailing_data: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    recv_window: Option<i64>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+struct BinanceOrderResponse {
+    #[serde(rename = "orderId")]
+    order_id: i64,
+    #[serde(rename = "clientOrderId")]
+    client_order_id: String,
+    #[serde(rename = "cummulativeQuoteQty")]
+    quote_quantity: Decimal,
+    #[serde(rename = "executedQty")]
+    executed_quantity: Decimal,
+    fills: Vec<BinanceFillOrder>,
+    #[serde(rename = "origQty")]
+    original_quantity: Decimal,
+    #[serde(rename = "origQuoteOrderQty")]
+    original_quote_quantity: Decimal,
+    price: Decimal,
+    status: BinanceOrderStatus,
+    #[serde(rename = "transactTime")]
+    transaction_time: i64,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+struct BinanceFillOrder {
+    commission: Decimal,
+    #[serde(rename = "commissionAsset")]
+    commission_asset: String,
+    price: Decimal,
+    qty: Decimal,
+    #[serde(rename = "tradeId")]
+    trade_id: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+enum BinanceOrderStatus {
+    New,
+    PendingNew,
+    Filled,
+    PartiallyFilled,
+    Canceled,
+    PendingCancel,
+    Rejected,
+    Expired,
+    ExpiredInMatch,
+}
+
+impl Default for BinanceOrderStatus {
+    fn default() -> Self {
+        BinanceOrderStatus::New
+    }
+}
+
+impl FromStr for BinanceOrderStatus {
+    type Err = ArgusErr;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "NEW" => Ok(Self::New),
+            "FILLED" => Ok(Self::Filled),
+            "PENDING_NEW" => Ok(Self::PendingNew),
+            "PARTIALLY_FILLED" => Ok(Self::PartiallyFilled),
+            "CANCELED" => Ok(Self::Canceled),
+            "PENDING_CANCEL" => Ok(Self::PendingCancel),
+            "REJECTED" => Ok(Self::Rejected),
+            "EXPIRED" => Ok(Self::Expired),
+            "EXPIRED_IN_MATCH" => Ok(Self::ExpiredInMatch),
+            _ => Err(ArgusErr::operation_ori(format!(
+                "Failed to convert {} into Status",
+                s
+            ))),
+        }
+    }
+}
+
+impl Display for BinanceOrderStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BinanceOrderStatus::Filled => write!(f, "FILLED"),
+            BinanceOrderStatus::New => write!(f, "NEW"),
+            BinanceOrderStatus::PendingNew => write!(f, "PENDING_NEW"),
+            BinanceOrderStatus::PendingCancel => write!(f, "PENDING_CANCEL"),
+            BinanceOrderStatus::PartiallyFilled => write!(f, "PARTIALLY_FILLED"),
+            BinanceOrderStatus::Canceled => write!(f, "CANCELED"),
+            BinanceOrderStatus::Rejected => write!(f, "REJECTED"),
+            BinanceOrderStatus::Expired => write!(f, "EXPIRED"),
+            BinanceOrderStatus::ExpiredInMatch => write!(f, "EXPIRED_IN_MATCH"),
+        }
+    }
+}
+
 impl BNBAccountInfo {
     /// Exclusively used to extract balances from account information fetched from Binance server.
     async fn get_balance(&self) -> Result<Balances, ArgusErr> {
@@ -391,8 +528,8 @@ impl BNBAccountInfo {
                 guard.insert(
                     x.asset.clone(),
                     Balance {
-                        available: Decimal::from_str(&x.locked).unwrap_or_default(),
-                        locked: Decimal::from_str(&x.free).unwrap_or_default(),
+                        available: Decimal::from_str(&x.free).unwrap_or_default(),
+                        locked: Decimal::from_str(&x.locked).unwrap_or_default(),
                     },
                 );
             }
