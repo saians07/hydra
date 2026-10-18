@@ -4,7 +4,10 @@ use hmac::{Hmac, KeyInit, Mac};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use sha2::{Sha256, Sha512};
-use std::{fmt, str::FromStr};
+use std::{
+    fmt::{self, Display},
+    str::FromStr,
+};
 
 /// Various hasher types might be used in signing/encrypting
 pub enum Hasher {
@@ -41,12 +44,48 @@ pub struct OrderBook {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct Order {}
+pub enum OrderStatus {
+    Open,
+    Closed,
+    Canceled,
+    Filled,
+    PartiallyFilled,
+}
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct OrderRequest {
+    pub pair: Pair,
+    pub market_id: Box<str>,
+    pub order_type: OrderType,
+    pub order_side: OrderSide,
+    pub order_status: OrderStatus,
+    pub client_order_id: Option<i64>,
+    pub expected_price: Option<Decimal>,
+    pub base_amount: Option<Decimal>,
+    pub quote_amount: Option<Decimal>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct OrderResponse {
+    pub pair: Pair,
+    pub market_id: Box<str>,
+    pub order_id: i64,
+    pub order_type: OrderType,
+    pub order_side: OrderSide,
+    pub trade_id: Vec<i64>,
+    pub client_order_id: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Pair {
     pub base: String,
     pub quote: String,
+}
+
+impl Pair {
+    pub fn new(base: String, quote: String) -> Self {
+        Pair { base, quote }
+    }
 }
 
 /// Store how long a time range will be applied. Useful to grab some data.
@@ -67,6 +106,24 @@ pub enum TimeFrame {
     OneHour,
     FourHour,
     OneDay,
+}
+
+impl Display for OrderType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            OrderType::MAKER => write!(f, "LIMIT"),
+            OrderType::TAKER => write!(f, "MARKET"),
+        }
+    }
+}
+
+impl Display for OrderSide {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            OrderSide::BUY => write!(f, "BUY"),
+            OrderSide::SELL => write!(f, "SELL"),
+        }
+    }
 }
 
 impl TimeRange {
@@ -202,6 +259,24 @@ pub async fn generate_request_body<P: serde::Serialize + Send + Sync + 'static>(
     match serde_qs::to_string(&payload) {
         Ok(p) => return Ok(Box::from(p)),
         Err(e) => return Err(ArgusErr::operation("Failed to build request body!", e)),
+    }
+}
+
+impl Default for OrderStatus {
+    fn default() -> Self {
+        OrderStatus::Open
+    }
+}
+
+impl Default for OrderType {
+    fn default() -> Self {
+        Self::TAKER
+    }
+}
+
+impl Default for OrderSide {
+    fn default() -> Self {
+        Self::BUY
     }
 }
 
