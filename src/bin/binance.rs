@@ -18,15 +18,20 @@
  * - Calculate current open position and adjust all trading configuration [Kirin]
  */
 
-#[cfg(feature = "binance")]
+// #[cfg(feature = "binance")]
 use argus::errors::ArgusErr;
-use hydra::{api::wallet::Balances, core::utils::OrderBook};
-#[cfg(feature = "binance")]
 use hydra::{
-    api::{data::DataFetch, spot::Spot, wallet::Wallet},
-    core::utils::{OrderRequest, OrderSide, OrderStatus, OrderType, Pair},
+    api::wallet::Balances,
+    core::dtos::{OrderBook, TimeRange},
+    core::enums::TimeFrame,
+};
+// #[cfg(feature = "binance")]
+use hydra::{
+    api::{data::DataFetch, wallet::Wallet},
+    core::dtos::Pair,
     exchanges::binance::Binance,
 };
+use polars::frame::DataFrame;
 
 #[cfg(feature = "binance")]
 #[tokio::main]
@@ -51,16 +56,17 @@ async fn main() -> Result<(), ArgusErr> {
 
             let ob = market.public_fetch_order_book(pair).await?;
             println!("The orderbook is {:#?}", ob);
+
+            let ohlcv = market
+                .public_fetch_ohlcv(
+                    hydra::core::enums::TimeFrame::OneHour,
+                    hydra::core::dtos::TimeRange::new(Some(chrono::Local::now()), 4u64)?,
+                    pair,
+                )
+                .await?;
+            println!("The OHLCV is: {:#?}", ohlcv.head(Some(4)));
         }
     }
-    // let ohlcv = binance
-    //     .public_fetch_ohlcv(
-    //         hydra::core::utils::TimeFrame::OneHour,
-    //         hydra::core::utils::TimeRange::new(Some(chrono::Local::now()), 4u64)?,
-    //         pair.clone(),
-    //     )
-    //     .await?;
-    // println!("The OHLCV is: {:#?}", ohlcv.head(Some(4)));
     // let ord = OrderRequest {
     //     pair: pair,
     //     market_id: binance.id.clone(),
@@ -91,6 +97,17 @@ impl Market {
     pub async fn public_fetch_order_book(&self, pair: &Pair) -> Result<OrderBook, ArgusErr> {
         match self {
             Market::Binance(b) => b.public_fetch_order_book(pair).await,
+        }
+    }
+
+    pub async fn public_fetch_ohlcv(
+        &self,
+        time_frame: TimeFrame,
+        time_range: TimeRange,
+        pair: &Pair,
+    ) -> Result<DataFrame, ArgusErr> {
+        match self {
+            Market::Binance(b) => b.public_fetch_ohlcv(time_frame, time_range, pair).await,
         }
     }
 }

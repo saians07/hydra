@@ -13,7 +13,7 @@ use async_trait::async_trait;
 use reqwest::header::HeaderMap;
 use serde::de::DeserializeOwned;
 
-use crate::core::utils::RequestType;
+use crate::core::enums::RequestType;
 
 #[async_trait]
 pub trait Request {

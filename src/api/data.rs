@@ -15,7 +15,10 @@ use argus::errors::ArgusErr;
 use async_trait::async_trait;
 use polars::frame::DataFrame;
 
-use crate::core::utils::{OrderBook, Pair, TimeFrame, TimeRange};
+use crate::core::{
+    dtos::{OrderBook, Pair, TimeRange},
+    enums::TimeFrame,
+};
 
 #[async_trait]
 pub trait DataStream {

@@ -1,22 +1,45 @@
 /*
- * Handle all kinds of spot transactions sent through API
+ * Handle all kinds of spot transactions.
+ *
+ * Basically, in transaction, we can do:
+ *      - market_order
+ *      - limit_order
+ *      - scaled_order
+ *
+ * Those three can be implemented either for buy or sell action
  */
 
 use argus::errors::ArgusErr;
 use async_trait::async_trait;
+use rust_decimal::Decimal;
 
-use crate::core::utils::{OrderRequest, OrderResponse};
+use crate::core::{
+    dtos::{OrderRequest, OrderResponse, Pair},
+    enums::{OrderSide, OrderType, TimeInForce},
+};
 
 #[async_trait]
 pub trait Spot {
-    /// Send order into server
-    ///
-    /// Spot order basically can be a market order or a limit order.
-    /// Market order will be executed immediately using the current price
-    /// while limit order will be executed on the ordered price.
-    /// Spot order has two types of side, Sell of Buy. Either you want to sell
-    /// or you want to buy.
-    /// Since, each market might have different order parameters and it is difficult to
-    /// use variadic in rust, we catch all possible paramters under Order struct.
-    async fn private_send_order(&self, order: OrderRequest) -> Result<OrderResponse, ArgusErr>;
+    /// Sending request order to the server.
+    async fn private_send_order(
+        &self,
+        order: OrderRequest,
+        order_side: OrderSide,
+        order_type: OrderType,
+    ) -> Result<OrderResponse, ArgusErr>;
+    /// Sending a buy maker order
+    async fn private_limit_buy_order(
+        &self,
+        pair: &Pair,
+        order_id: Option<i64>,
+        expected_price: Decimal,
+        base_amount: Decimal,
+        time_in_force: TimeInForce,
+    ) -> Result<OrderResponse, ArgusErr>;
+    /// Sending a buy taker order
+    async fn private_market_buy_order(
+        &self,
+        base_amount: Option<Decimal>,
+        quote_amount: Option<Decimal>,
+    ) -> Result<OrderResponse, ArgusErr>;
 }

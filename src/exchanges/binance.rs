@@ -20,9 +20,10 @@ use crate::{
         spot::Spot,
         wallet::{Balance, Balances, Wallet},
     },
-    core::utils::{
-        Hasher, OrderBook, OrderRequest, OrderResponse, Pair, RequestType, TimeFrame, TimeRange,
-        generate_request_body,
+    core::{
+        dtos::{OrderBook, OrderRequest, OrderResponse, Pair, TimeRange},
+        enums::{Hasher, OrderSide, OrderType, RequestType, TimeFrame, TimeInForce},
+        utils::generate_request_body,
     },
 };
 
@@ -250,7 +251,12 @@ impl Exchange for Binance {
 
 #[async_trait]
 impl Spot for Binance {
-    async fn private_send_order(&self, order: OrderRequest) -> Result<OrderResponse, ArgusErr> {
+    async fn private_send_order(
+        &self,
+        order: OrderRequest,
+        order_side: OrderSide,
+        order_type: OrderType,
+    ) -> Result<OrderResponse, ArgusErr> {
         let endpoint = format!("{}{}", self.private_api_url, "/api/v3/order");
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -263,8 +269,8 @@ impl Spot for Binance {
         );
         let order_data = BinanceOrderRequest {
             symbol: format!("{}{}", order.pair.base.clone(), order.pair.quote.clone()).into(),
-            side: order.order_side.to_string(),
-            order_type: order.order_type.to_string(),
+            side: order_side.to_string(),
+            order_type: order_type.to_string(),
             timestamp: chrono::Local::now().timestamp_millis(),
             quantity: order.base_amount,
             quote_order_quantity: order.quote_amount,
@@ -289,13 +295,43 @@ impl Spot for Binance {
             pair: order.pair,
             order_id: binance_resp.order_id,
             market_id: self.id.clone(),
-            order_type: order.order_type,
-            order_side: order.order_side,
+            order_type: order_type,
+            order_side: order_side,
             trade_id: binance_resp.fills.iter().map(|x| x.trade_id).collect(),
             client_order_id: order.client_order_id,
         };
 
         Ok(order_resp)
+    }
+
+    async fn private_limit_buy_order(
+        &self,
+        pair: &Pair,
+        order_id: Option<i64>,
+        expected_price: Decimal,
+        base_amount: Decimal,
+        time_in_force: TimeInForce,
+    ) -> Result<OrderResponse, ArgusErr> {
+        let order_type = OrderType::MAKER;
+        let order_side = OrderSide::BUY;
+
+        let order = OrderRequest {
+            pair: pair.clone(),
+            client_order_id: order_id,
+            expected_price: Some(expected_price),
+            base_amount: Some(base_amount),
+            quote_amount: None,
+            time_in_force: Some(time_in_force),
+        };
+
+        self.private_send_order(order, order_side, order_type).await
+    }
+    async fn private_market_buy_order(
+        &self,
+        base_amount: Option<Decimal>,
+        quote_amount: Option<Decimal>,
+    ) -> Result<OrderResponse, ArgusErr> {
+        Err(ArgusErr::BADREQUEST)
     }
 }
 
