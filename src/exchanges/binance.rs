@@ -307,9 +307,10 @@ impl Spot for Binance {
     async fn private_limit_buy_order(
         &self,
         pair: &Pair,
-        order_id: Option<i64>,
+        client_order_id: Option<i64>,
         expected_price: Decimal,
-        base_amount: Decimal,
+        base_amount: Option<Decimal>,
+        quote_amount: Option<Decimal>,
         time_in_force: TimeInForce,
     ) -> Result<OrderResponse, ArgusErr> {
         let order_type = OrderType::MAKER;
@@ -317,10 +318,10 @@ impl Spot for Binance {
 
         let order = OrderRequest {
             pair: pair.clone(),
-            client_order_id: order_id,
+            client_order_id: client_order_id,
             expected_price: Some(expected_price),
-            base_amount: Some(base_amount),
-            quote_amount: None,
+            base_amount: base_amount,
+            quote_amount: quote_amount,
             time_in_force: Some(time_in_force),
         };
 
@@ -328,8 +329,32 @@ impl Spot for Binance {
     }
     async fn private_market_buy_order(
         &self,
-        base_amount: Option<Decimal>,
+        pair: &Pair,
+        client_order_id: Option<i64>,
         quote_amount: Option<Decimal>,
+    ) -> Result<OrderResponse, ArgusErr> {
+        let order_type = OrderType::TAKER;
+        let order_side = OrderSide::BUY;
+
+        let order = OrderRequest {
+            pair: pair.clone(),
+            client_order_id: client_order_id,
+            expected_price: None,
+            base_amount: None,
+            quote_amount: quote_amount,
+            time_in_force: None,
+        };
+
+        self.private_send_order(order, order_side, order_type).await
+    }
+    async fn private_limit_scaled_buy_order(
+        &self,
+        pair: &Pair,
+        order_id: Option<i64>,
+        expected_price: Decimal,
+        base_amount: Decimal,
+        time_in_force: TimeInForce,
+        scales: Vec<f64>,
     ) -> Result<OrderResponse, ArgusErr> {
         Err(ArgusErr::BADREQUEST)
     }

@@ -33,15 +33,15 @@ pub trait Spot {
         pair: &Pair,
         order_id: Option<i64>,
         expected_price: Decimal,
-        base_amount: Decimal,
+        base_amount: Option<Decimal>,
+        quote_amount: Option<Decimal>,
         time_in_force: TimeInForce,
     ) -> Result<OrderResponse, ArgusErr>;
-    /// Sending a buy taker order
+    /// Sending a buyL taker order
     async fn private_market_buy_order(
         &self,
         pair: &Pair,
         order_id: Option<i64>,
-        base_amount: Option<Decimal>,
         quote_amount: Option<Decimal>,
     ) -> Result<OrderResponse, ArgusErr>;
     /// Sending scaled order buy (only for limit)
@@ -52,6 +52,6 @@ pub trait Spot {
         expected_price: Decimal,
         base_amount: Decimal,
         time_in_force: TimeInForce,
-        scaled: Vec<f64>,
+        scales: Vec<f64>,
     ) -> Result<OrderResponse, ArgusErr>;
 }
