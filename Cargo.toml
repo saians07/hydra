@@ -1,0 +1,14 @@
+[package]
+name = "hydra"
+version = "0.1.1"
+edition = "2024"
+
+[dependencies]
+argus = { git = "https://github.com/saians07/argus.git", features = ["logs", "errors"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+async-trait = "0.1.92"
+anyhow = "1.0.104"
+rust_decimal = "1.42.1"
+reqwest = { version = "0.13.4", features = ["json"] }
+
+[features]
