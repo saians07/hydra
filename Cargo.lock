@@ -562,6 +562,7 @@ dependencies = [
  "async-trait",
  "reqwest",
  "rust_decimal",
+ "serde",
  "tokio",
 ]
 

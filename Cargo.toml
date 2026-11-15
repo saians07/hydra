@@ -10,5 +10,6 @@ async-trait = "0.1.92"
 anyhow = "1.0.104"
 rust_decimal = "1.42.1"
 reqwest = { version = "0.13.4", features = ["json"] }
+serde = "1.0.229"
 
 [features]
