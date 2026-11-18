@@ -3,6 +3,9 @@ use hmac::{Hmac, KeyInit, Mac};
 use serde::{Deserialize, Serialize};
 use sha2::{Sha256, Sha512};
 
+type HmacSha256 = Hmac<Sha256>;
+type HmacSha512 = Hmac<Sha512>;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum RequestType {
     GET,
@@ -12,13 +15,42 @@ pub enum RequestType {
     PATCH,
 }
 
-type HmacSha256 = Hmac<Sha256>;
-type HmacSha512 = Hmac<Sha512>;
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum Hasher {
     Sha256,
     Sha512,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Default)]
+pub enum TimeInForce {
+    #[default]
+    GTC, // good till cancelled
+    IOC,
+    FOK, // FIll or Kill
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Default)]
+pub enum OrderType {
+    MAKER,
+    #[default]
+    TAKER,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub enum OrderSide {
+    SELL,
+    #[default]
+    BUY,
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+pub enum OrderStatus {
+    #[default]
+    Open,
+    Closed,
+    Canceled,
+    Filled,
+    PartiallyFilled,
 }
 
 impl Hasher {
