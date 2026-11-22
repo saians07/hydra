@@ -6,4 +6,5 @@
 
 pub mod account;
 pub mod request;
+pub mod trades;
 pub mod wallet;
