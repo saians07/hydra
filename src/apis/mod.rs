@@ -5,6 +5,7 @@
  */
 
 pub mod account;
+pub mod exchange;
 pub mod request;
 pub mod trades;
 pub mod wallet;
