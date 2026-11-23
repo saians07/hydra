@@ -1,3 +1,5 @@
+use argus::errors::ArgusErr;
+use chrono::{DateTime, Days, Local};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
@@ -7,6 +9,12 @@ use super::enums::{OrderSide, OrderType, TimeInForce};
 pub struct OrderBook {
     pub bids: Vec<(Decimal, Decimal)>,
     pub asks: Vec<(Decimal, Decimal)>,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct TimeRange {
+    pub from: DateTime<Local>,
+    pub to: DateTime<Local>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -39,5 +47,34 @@ pub struct OrderResponse {
 impl Pair {
     pub fn new(base: String, quote: String) -> Self {
         Pair { base, quote }
+    }
+}
+
+impl TimeRange {
+    pub fn new(end_time: Option<DateTime<Local>>, lookback_days: u64) -> Result<Self, ArgusErr> {
+        let to_time = match end_time {
+            Some(time) => time,
+            _ => chrono::Local::now(),
+        };
+
+        let to = to_time;
+        let from = to_time
+            .checked_sub_days(Days::new(lookback_days))
+            .unwrap_or(to_time);
+
+        Ok(Self { to, from })
+    }
+
+    pub fn to_timestamp(&self) -> Result<(i64, i64), ArgusErr> {
+        let to: i64 = self.to.timestamp();
+        let from: i64 = self.from.timestamp();
+
+        Ok((to, from))
+    }
+
+    pub fn to_str(&self) -> Result<(Box<str>, Box<str>), ArgusErr> {
+        let (to, from) = self.to_timestamp()?;
+
+        Ok((to.to_string().into(), from.to_string().into()))
     }
 }
