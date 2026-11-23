@@ -2,6 +2,7 @@ use std::{fmt::Display, str::FromStr};
 
 use argus::errors::ArgusErr;
 use async_trait::async_trait;
+use chrono::{DateTime, Local};
 use reqwest::{Client, header::HeaderMap};
 use rust_decimal::Decimal;
 use secrecy::{ExposeSecret, SecretString};
@@ -10,6 +11,7 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use crate::{
     apis::{
         account::Account,
+        exchange::Exchange,
         request::Request,
         wallet::{Balance, Balances, Wallet},
     },
@@ -50,6 +52,34 @@ impl Account for Binance {
 
         self.send_request::<T>(&endpoint, RequestType::GET, None, headers)
             .await
+    }
+}
+
+#[async_trait]
+impl Exchange for Binance {
+    async fn public_get_server_time(&self) -> Result<DateTime<Local>, ArgusErr> {
+        let endpoint = format!("{}{}", self.public_api_url, "/api/v3/time");
+        let mut headers = HeaderMap::new();
+        headers.insert("Content-Type", "application/json".parse().unwrap());
+
+        let res = self
+            .send_request::<serde_json::Value>(&endpoint, RequestType::GET, None, headers)
+            .await?;
+
+        let milis = res
+            .get("serverTime")
+            .unwrap_or_default()
+            .to_string()
+            .parse::<i64>()
+            .map_err(|e| ArgusErr::operation("Failed to parse server time to timestamp.", e))?;
+
+        let date_time = chrono::DateTime::from_timestamp_millis(milis)
+            .unwrap()
+            .with_timezone(&Local);
+
+        println!("Result: {:#?}", date_time);
+
+        Ok(date_time)
     }
 }
 
