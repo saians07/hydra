@@ -1,4 +1,7 @@
-use std::fmt::{self, Display};
+use std::{
+    fmt::{self, Display},
+    str::FromStr,
+};
 
 use argus::errors::ArgusErr;
 use hmac::{Hmac, KeyInit, Mac};
@@ -101,5 +104,59 @@ impl Display for TimeFrame {
         };
 
         write!(f, "{}", s)
+    }
+}
+
+impl FromStr for TimeFrame {
+    type Err = ArgusErr;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "One Minute" => Ok(TimeFrame::OneMinute),
+            "Five Minutes" => Ok(TimeFrame::FiveMinutes),
+            "Thirty Minutes" => Ok(TimeFrame::ThirtyMinutes),
+            "One Hour" => Ok(TimeFrame::OneHour),
+            "Four Hour" => Ok(TimeFrame::FourHour),
+            "One Day" => Ok(TimeFrame::OneDay),
+            _ => Err(ArgusErr::operation_ori(format!(
+                "Failed to convert unknown string: {}",
+                s
+            ))),
+        }
+    }
+}
+
+impl TimeFrame {
+    pub const ALL_VARIANTS: [TimeFrame; 6] = [
+        TimeFrame::OneMinute,
+        TimeFrame::FiveMinutes,
+        TimeFrame::ThirtyMinutes,
+        TimeFrame::OneHour,
+        TimeFrame::FourHour,
+        TimeFrame::OneDay,
+    ];
+
+    /// This is a function fo facilitate market that provides timeframe in minutes period in their API
+    pub fn get_period_minute(&self) -> i32 {
+        match self {
+            TimeFrame::OneMinute => 1,
+            TimeFrame::FiveMinutes => 5,
+            TimeFrame::ThirtyMinutes => 30,
+            TimeFrame::OneHour => 60,
+            TimeFrame::FourHour => 240,
+            TimeFrame::OneDay => 720,
+        }
+    }
+
+    /// This is a function to facilitate market that provides their timframe in string
+    pub fn get_period_name(&self) -> Box<str> {
+        match self {
+            TimeFrame::OneMinute => "1m".into(),
+            TimeFrame::FiveMinutes => "5m".into(),
+            TimeFrame::ThirtyMinutes => "30m".into(),
+            TimeFrame::OneHour => "1h".into(),
+            TimeFrame::FourHour => "4h".into(),
+            TimeFrame::OneDay => "1d".into(),
+        }
     }
 }
