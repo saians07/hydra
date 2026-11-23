@@ -1,13 +1,18 @@
-use std::fmt::Display;
+use std::{fmt::Display, str::FromStr};
 
 use argus::errors::ArgusErr;
 use async_trait::async_trait;
 use reqwest::{Client, header::HeaderMap};
+use rust_decimal::Decimal;
 use secrecy::{ExposeSecret, SecretString};
-use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use crate::{
-    apis::{account::Account, request::Request},
+    apis::{
+        account::Account,
+        request::Request,
+        wallet::{Balance, Balances, Wallet},
+    },
     core::enums::{Hasher, RequestType},
 };
 
@@ -123,6 +128,17 @@ impl Request for Binance {
     }
 }
 
+#[async_trait]
+impl Wallet for Binance {
+    async fn private_fetch_balances(&self) -> Result<Balances, ArgusErr> {
+        let account_info = self
+            .private_fetch_account_information::<BNBAccountInfo>()
+            .await?;
+
+        account_info.get_balance().await
+    }
+}
+
 impl Display for Binance {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "The market is: {}", self.name)
@@ -143,5 +159,55 @@ impl Binance {
             public_ws_url: None,
             api_url_testing: None,
         }
+    }
+}
+
+/*
+ * LIST OF Binance's specific struct
+ */
+#[derive(Debug, Serialize, Deserialize)]
+struct BNBAccountInfo {
+    #[serde(rename = "makerCommission")]
+    maker_commission: f64,
+    #[serde(rename = "takerCommission")]
+    taker_commission: f64,
+    pub balances: Vec<BNBBalance>,
+    #[serde(rename = "accountType")]
+    account_type: String,
+    permissions: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct BNBBalance {
+    asset: Box<str>,
+    free: Box<str>,
+    locked: Box<str>,
+}
+
+impl BNBAccountInfo {
+    async fn get_balance(&self) -> Result<Balances, ArgusErr> {
+        let balances = Balances::new().await;
+        for x in &self.balances {
+            if x.locked.parse::<f64>().unwrap_or(0.0) == 0.0
+                && x.free.parse::<f64>().unwrap_or(0.0) == 0.0
+            {
+                continue;
+            }
+
+            // This block is used to lock the balance to ensure fast lock
+            // and release
+            {
+                let mut guard = balances.0.write().await;
+                guard.insert(
+                    x.asset.clone(),
+                    Balance {
+                        available: Decimal::from_str(&x.free).unwrap_or_default(),
+                        locked: Decimal::from_str(&x.locked).unwrap_or_default(),
+                    },
+                );
+            }
+        }
+
+        Ok(balances)
     }
 }
