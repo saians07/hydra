@@ -4,6 +4,12 @@ use serde::{Deserialize, Serialize};
 use super::enums::{OrderSide, OrderType, TimeInForce};
 
 #[derive(Debug, Clone, Deserialize, Default)]
+pub struct OrderBook {
+    pub bids: Vec<(Decimal, Decimal)>,
+    pub asks: Vec<(Decimal, Decimal)>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
 pub struct OrderRequest {
     pub pair: Pair,
     pub client_order_id: Option<String>,
