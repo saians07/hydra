@@ -1,3 +1,5 @@
+use std::fmt::{self, Display};
+
 use argus::errors::ArgusErr;
 use hmac::{Hmac, KeyInit, Mac};
 use serde::{Deserialize, Serialize};
@@ -19,6 +21,17 @@ pub enum RequestType {
 pub enum Hasher {
     Sha256,
     Sha512,
+}
+
+#[derive(Debug, Clone, Default)]
+pub enum TimeFrame {
+    OneMinute,
+    FiveMinutes,
+    ThirtyMinutes,
+    #[default]
+    OneHour,
+    FourHour,
+    OneDay,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Default)]
@@ -73,5 +86,20 @@ impl Hasher {
                 Ok(Box::from(hex::encode(result)))
             }
         }
+    }
+}
+
+impl Display for TimeFrame {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            TimeFrame::OneMinute => "One Minute",
+            TimeFrame::FiveMinutes => "Five Minutes",
+            TimeFrame::ThirtyMinutes => "Thirty Minutes",
+            TimeFrame::OneHour => "One Hour",
+            TimeFrame::FourHour => "Four hour",
+            TimeFrame::OneDay => "One Day",
+        };
+
+        write!(f, "{}", s)
     }
 }
