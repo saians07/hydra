@@ -12,7 +12,7 @@ use crate::core::{
 };
 
 #[async_trait]
-pub trait Spot {
+pub trait SpotOrder {
     async fn private_send_order(
         &self,
         order: OrderRequest,
