@@ -2,20 +2,26 @@ use std::{fmt::Display, str::FromStr};
 
 use argus::errors::ArgusErr;
 use async_trait::async_trait;
-use chrono::{DateTime, Local};
+use chrono::{DateTime, Local, Utc};
+use polars::{df, frame::DataFrame};
 use reqwest::{Client, header::HeaderMap};
 use rust_decimal::Decimal;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde_with::{DisplayFromStr, serde_as};
 
 use crate::{
     apis::{
         account::Account,
+        data::fetch::DataFetch,
         exchange::Exchange,
         request::Request,
         wallet::{Balance, Balances, Wallet},
     },
-    core::enums::{Hasher, RequestType},
+    core::{
+        dtos::{OrderBook, Pair, TimeRange},
+        enums::{Hasher, RequestType, TimeFrame},
+    },
 };
 
 #[derive(Debug, Clone)]
@@ -52,6 +58,57 @@ impl Account for Binance {
 
         self.send_request::<T>(&endpoint, RequestType::GET, None, headers)
             .await
+    }
+}
+
+#[async_trait]
+impl DataFetch for Binance {
+    async fn public_fetch_order_book(&self, pair: &Pair) -> Result<OrderBook, ArgusErr> {
+        let symbol = format!("symbol={}{}", pair.base, pair.quote);
+        let endpoint = format!("{}{}?{}", self.public_api_url, "/api/v3/depth", symbol);
+        let headers = HeaderMap::new();
+
+        self.send_request::<OrderBook>(&endpoint, RequestType::GET, None, headers)
+            .await
+    }
+
+    async fn public_fetch_ohlcv(
+        &self,
+        time_frame: TimeFrame,
+        time_range: TimeRange,
+        pair: &Pair,
+    ) -> Result<DataFrame, ArgusErr> {
+        let query = format!(
+            "symbol={}{}&interval={}&startTime={}&endTime={}",
+            pair.base,
+            pair.quote,
+            time_frame.get_period_name(),
+            time_range.from.with_timezone(&Utc).timestamp() * 1000,
+            time_range.to.with_timezone(&Utc).timestamp() * 1000
+        );
+        let endpoint = format!("{}{}?{}", self.public_api_url, "/api/v3/klines", query);
+        let headers = HeaderMap::new();
+
+        let res = self
+            .send_request::<Vec<BNBOhlcv>>(&endpoint, RequestType::GET, None, headers)
+            .await?;
+
+        let df = df!(
+            "open" => res.iter().map(|x| x.open).collect::<Vec<_>>(),
+            "high" => res.iter().map(|x| x.high).collect::<Vec<_>>(),
+            "low" => res.iter().map(|x| x.low).collect::<Vec<_>>(),
+            "close" => res.iter().map(|x| x.closing).collect::<Vec<_>>(),
+            "base_volume" => res.iter().map(|x| x.base_volume).collect::<Vec<_>>(),
+            "quote_volume" => res.iter().map(|x| x.quote_volume).collect::<Vec<_>>(),
+            "open_time" => res.iter().map(|x| {x.open_time}).collect::<Vec<_>>(),
+            "close_time" => res.iter().map(|x| {x.close_time}).collect::<Vec<_>>(),
+            "trades_count" => res.iter().map(|x| x.trades_count).collect::<Vec<_>>(),
+            "taker_buy_base_volume" => res.iter().map(|x| x.taker_base_volume).collect::<Vec<_>>(),
+            "taker_buy_quote_volume" => res.iter().map(|x| x.taker_quote_volume).collect::<Vec<_>>(),
+        )
+        .map_err(|e| ArgusErr::operation("Failed to convert OHLCV data to data frame", e))?;
+
+        Ok(df)
     }
 }
 
@@ -212,6 +269,32 @@ struct BNBBalance {
     asset: Box<str>,
     free: Box<str>,
     locked: Box<str>,
+}
+
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize)]
+struct BNBOhlcv {
+    open_time: i64,
+    #[serde_as(as = "DisplayFromStr")]
+    open: f64,
+    #[serde_as(as = "DisplayFromStr")]
+    high: f64,
+    #[serde_as(as = "DisplayFromStr")]
+    low: f64,
+    #[serde_as(as = "DisplayFromStr")]
+    closing: f64,
+    #[serde_as(as = "DisplayFromStr")]
+    base_volume: f64,
+    close_time: i64,
+    #[serde_as(as = "DisplayFromStr")]
+    quote_volume: f64,
+    trades_count: i64,
+    #[serde_as(as = "DisplayFromStr")]
+    taker_base_volume: f64,
+    #[serde_as(as = "DisplayFromStr")]
+    taker_quote_volume: f64,
+    #[serde_as(as = "DisplayFromStr")]
+    ignore: String,
 }
 
 impl BNBAccountInfo {
