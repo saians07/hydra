@@ -160,3 +160,21 @@ impl TimeFrame {
         }
     }
 }
+
+impl Display for OrderSide {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            OrderSide::BUY => write!(f, "BUY"),
+            OrderSide::SELL => write!(f, "SELL"),
+        }
+    }
+}
+
+impl Display for OrderType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            OrderType::MAKER => write!(f, "LIMIT"),
+            OrderType::TAKER => write!(f, "MARKET"),
+        }
+    }
+}
