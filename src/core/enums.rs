@@ -11,8 +11,9 @@ use sha2::{Sha256, Sha512};
 type HmacSha256 = Hmac<Sha256>;
 type HmacSha512 = Hmac<Sha512>;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub enum RequestType {
+    #[default]
     GET,
     POST,
     DELETE,
