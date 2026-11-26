@@ -1,4 +1,4 @@
-use std::{fmt::Display, str::FromStr};
+use std::{default, fmt::Display, str::FromStr};
 
 use argus::errors::ArgusErr;
 use async_trait::async_trait;
@@ -16,11 +16,13 @@ use crate::{
         data::fetch::DataFetch,
         exchange::Exchange,
         request::Request,
+        trades::spot::SpotOrder,
         wallet::{Balance, Balances, Wallet},
     },
     core::{
-        dtos::{OrderBook, Pair, TimeRange},
-        enums::{Hasher, RequestType, TimeFrame},
+        dtos::{OrderBook, OrderRequest, OrderResponse, Pair, TimeRange},
+        enums::{Hasher, OrderSide, OrderType, RequestType, TimeFrame},
+        helper::generate_request_body,
     },
 };
 
@@ -188,19 +190,22 @@ impl Request for Binance {
                     .headers(headers)
                     .body(body.unwrap().to_owned());
 
-                request
-                    .send()
-                    .await
-                    .map_err(|e| {
-                        ArgusErr::operation("Failed to post request to Binance server!", e)
-                    })?
-                    .error_for_status()
-                    .map_err(|e| ArgusErr::operation("Error with status code", e))?
-                    .json()
-                    .await
-                    .map_err(|e| {
-                        ArgusErr::operation("Failed to convert Binance's response to json", e)
-                    })
+                let response = request.send().await.map_err(|e| {
+                    ArgusErr::operation("Failed to post request to Binance server!", e)
+                })?;
+
+                if !response.status().is_success() {
+                    let status = response.status();
+                    let error_body = response.text().await.unwrap_or_default();
+                    return Err(ArgusErr::operation_ori(format!(
+                        "Binance returned {}: {}",
+                        status, error_body
+                    )));
+                }
+
+                response.json().await.map_err(|e| {
+                    ArgusErr::operation("Failed to convert Binance's response to json", e)
+                })
             }
             RequestType::DELETE => Err(ArgusErr::operation_ori(
                 "DELETE request type is not yet supported!",
@@ -212,6 +217,62 @@ impl Request for Binance {
                 "PUT request type is not yet supported!",
             )),
         }
+    }
+}
+
+#[async_trait]
+impl SpotOrder for Binance {
+    async fn private_send_order(&self, order: OrderRequest) -> Result<OrderResponse, ArgusErr> {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "Content-Type",
+            "application/x-www-form-urlencoded".parse().unwrap(),
+        );
+        headers.insert(
+            "X-MBX-APIKEY",
+            self.api_key.expose_secret().parse().unwrap(),
+        );
+        let symbol = format!(
+            "{}{}",
+            order.pair.base.to_owned(),
+            order.pair.quote.to_owned()
+        );
+        let order_data = BNBOrderRequest {
+            symbol: symbol.into(),
+            side: order.order_side.to_string(),
+            order_type: order.order_type.to_string(),
+            timestamp: chrono::Local::now().timestamp_millis(),
+            quantity: order.base_amount,
+            quote_order_quantity: order.quote_amount,
+            price: order.expected_price,
+            client_order_id: order.client_order_id.to_owned(),
+            ..Default::default()
+        };
+        let body = generate_request_body(order_data).await?;
+        let signed_body = self.sign_request(body.as_ref()).await?;
+        let full_body = format!("{}&signature={}", body, signed_body);
+
+        let endpoint = format!("{}{}", self.private_api_url, "/api/v3/order");
+
+        let bnb_resp = self
+            .send_request::<BNBOrderResponse>(
+                &endpoint,
+                order.request_type,
+                Some(&full_body),
+                headers,
+            )
+            .await?;
+
+        let resp = OrderResponse {
+            pair: order.pair,
+            order_id: bnb_resp.order_id,
+            market_id: self.id.to_owned(),
+            order_type: order.order_type,
+            order_side: order.order_side,
+            trade_id: bnb_resp.fills.iter().map(|x| x.trade_id).collect(),
+            client_order_id: order.client_order_id,
+        };
+        Ok(resp)
     }
 }
 
@@ -295,6 +356,74 @@ struct BNBOhlcv {
     taker_quote_volume: f64,
     #[serde_as(as = "DisplayFromStr")]
     ignore: String,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct BNBOrderRequest {
+    symbol: Box<str>,
+    side: String,
+    #[serde(rename = "type")]
+    order_type: String,
+    timestamp: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    quantity: Option<Decimal>,
+    #[serde(rename = "quoteOrderQty", skip_serializing_if = "Option::is_none")]
+    quote_order_quantity: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    price: Option<Decimal>,
+    #[serde(rename = "newClientOrderId", skip_serializing_if = "Option::is_none")]
+    client_order_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    trailing_data: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    recv_window: Option<i64>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+struct BNBOrderResponse {
+    #[serde(rename = "orderId")]
+    order_id: i64,
+    #[serde(rename = "clientOrderId")]
+    client_order_id: String,
+    #[serde(rename = "cummulativeQuoteQty")]
+    quote_quantity: Decimal,
+    #[serde(rename = "executedQty")]
+    executed_quantity: Decimal,
+    fills: Vec<BinanceFillOrder>,
+    #[serde(rename = "origQty")]
+    original_quantity: Decimal,
+    #[serde(rename = "origQuoteOrderQty")]
+    original_quote_quantity: Decimal,
+    price: Decimal,
+    status: BNBOrderStatus,
+    #[serde(rename = "transactTime")]
+    transaction_time: i64,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+struct BinanceFillOrder {
+    commission: Decimal,
+    #[serde(rename = "commissionAsset")]
+    commission_asset: String,
+    price: Decimal,
+    qty: Decimal,
+    #[serde(rename = "tradeId")]
+    trade_id: i64,
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+enum BNBOrderStatus {
+    #[default]
+    New,
+    PendingNew,
+    Filled,
+    PartiallyFilled,
+    Canceled,
+    PendingCancel,
+    Rejected,
+    Expired,
+    ExpiredInMatch,
 }
 
 impl BNBAccountInfo {
