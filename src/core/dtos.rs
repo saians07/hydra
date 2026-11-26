@@ -3,6 +3,8 @@ use chrono::{DateTime, Days, Local};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
+use crate::core::enums::RequestType;
+
 use super::enums::{OrderSide, OrderType, TimeInForce};
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -20,6 +22,9 @@ pub struct TimeRange {
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct OrderRequest {
     pub pair: Pair,
+    pub order_type: OrderType,
+    pub order_side: OrderSide,
+    pub request_type: RequestType,
     pub client_order_id: Option<String>,
     pub expected_price: Option<Decimal>,    // for limit order
     pub base_amount: Option<Decimal>,       // for market order
