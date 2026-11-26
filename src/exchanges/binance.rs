@@ -20,7 +20,7 @@ use crate::{
         wallet::{Balance, Balances, Wallet},
     },
     core::{
-        dtos::{OrderBook, OrderRequest, OrderResponse, Pair, TimeRange},
+        dtos::{OrderBook, OrderPosition, OrderRequest, OrderResponse, Pair, TimeRange},
         enums::{Hasher, OrderSide, OrderType, RequestType, TimeFrame},
         helper::generate_request_body,
     },
@@ -60,6 +60,18 @@ impl Account for Binance {
 
         self.send_request::<T>(&endpoint, RequestType::GET, None, headers)
             .await
+    }
+
+    async fn private_fetch_open_orders(&self) -> Result<Vec<OrderPosition>, ArgusErr> {
+        unimplemented!()
+    }
+
+    async fn private_fetch_order(
+        &self,
+        symbol: String,
+        order_id: String,
+    ) -> Result<OrderPosition, ArgusErr> {
+        unimplemented!()
     }
 }
 
