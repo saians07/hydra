@@ -3,7 +3,7 @@ use chrono::{DateTime, Days, Local};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-use crate::core::enums::RequestType;
+use crate::core::enums::{OrderStatus, RequestType};
 
 use super::enums::{OrderSide, OrderType, TimeInForce};
 
@@ -47,6 +47,13 @@ pub struct OrderResponse {
     pub order_side: OrderSide,
     pub trade_id: Vec<i64>,
     pub client_order_id: Option<String>,
+}
+
+pub struct OrderPosition {
+    pub symbol: String,
+    pub order_id: String,
+    pub client_order_id: String,
+    pub status: OrderStatus,
 }
 
 impl Pair {

@@ -64,6 +64,7 @@ pub enum OrderSide {
 pub enum OrderStatus {
     #[default]
     Open,
+    New,
     Closed,
     Canceled,
     Filled,
