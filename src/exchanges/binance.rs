@@ -62,7 +62,11 @@ impl Account for Binance {
             .await
     }
 
-    async fn private_fetch_open_orders(&self) -> Result<Vec<OrderPosition>, ArgusErr> {
+    async fn private_fetch_open_orders(
+        &self,
+        pair: Option<Pair>,
+        recv_window: Option<i64>,
+    ) -> Result<Vec<OrderPosition>, ArgusErr> {
         unimplemented!()
     }
 
