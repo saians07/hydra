@@ -60,6 +60,12 @@ impl Pair {
     pub fn new(base: String, quote: String) -> Self {
         Pair { base, quote }
     }
+    pub fn create_type_1(&self) -> String {
+        format!("{}{}", self.base, self.quote)
+    }
+    pub fn create_type_2(&self) -> String {
+        format!("{}_{}", self.base, self.quote)
+    }
 }
 
 impl TimeRange {
