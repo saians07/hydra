@@ -49,6 +49,7 @@ pub struct OrderResponse {
     pub client_order_id: Option<String>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
 pub struct OrderPosition {
     pub symbol: String,
     pub order_id: String,
