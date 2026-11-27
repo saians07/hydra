@@ -1,4 +1,4 @@
-use std::{default, fmt::Display, str::FromStr};
+use std::{fmt::Display, str::FromStr};
 
 use argus::errors::ArgusErr;
 use async_trait::async_trait;
@@ -67,7 +67,28 @@ impl Account for Binance {
         pair: Option<Pair>,
         recv_window: Option<i64>,
     ) -> Result<Vec<OrderPosition>, ArgusErr> {
-        unimplemented!()
+        let mut query = generate_timestamp_query().await;
+        if let Some(pr) = pair {
+            query += format!("&symbol={}", pr.create_type_1()).as_str()
+        }
+        if let Some(recv) = recv_window {
+            query += format!("&recvWindow={}", recv).as_str()
+        }
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "X-MBX-APIKEY",
+            self.api_key.expose_secret().parse().unwrap(),
+        );
+
+        let signed_query = self.sign_request(&query).await?;
+
+        let endpoint = format!(
+            "{}{}{}&signature={}",
+            self.private_api_url, "/api/v3/openOrders?", query, signed_query
+        );
+
+        self.send_request::<Vec<OrderPosition>>(&endpoint, RequestType::GET, None, headers)
+            .await
     }
 
     async fn private_fetch_order(
