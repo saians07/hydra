@@ -21,7 +21,7 @@ use crate::{
     },
     core::{
         dtos::{OrderBook, OrderPosition, OrderRequest, OrderResponse, Pair, TimeRange},
-        enums::{Hasher, OrderSide, OrderType, RequestType, TimeFrame},
+        enums::{Hasher, RequestType, TimeFrame},
         helper::generate_request_body,
     },
 };
@@ -43,7 +43,7 @@ pub struct Binance {
 #[async_trait]
 impl Account for Binance {
     async fn private_fetch_account_information<T: DeserializeOwned>(&self) -> Result<T, ArgusErr> {
-        let query = format!("timestamp={}", chrono::Local::now().timestamp_millis());
+        let query = generate_timestamp_query().await;
         let mut headers = HeaderMap::new();
         headers.insert(
             "X-MBX-APIKEY",
@@ -324,6 +324,10 @@ impl Binance {
             api_url_testing: None,
         }
     }
+}
+
+async fn generate_timestamp_query() -> String {
+    format!("timestamp={}", chrono::Local::now().timestamp_millis())
 }
 
 /*
