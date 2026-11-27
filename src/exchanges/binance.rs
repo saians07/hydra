@@ -44,11 +44,7 @@ pub struct Binance {
 impl Account for Binance {
     async fn private_fetch_account_information<T: DeserializeOwned>(&self) -> Result<T, ArgusErr> {
         let query = generate_timestamp_query().await;
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            "X-MBX-APIKEY",
-            self.api_key.expose_secret().parse().unwrap(),
-        );
+        let headers = generate_base_headers(Some(self.api_key.to_owned())).await;
 
         // account needs query to be signed
         let signed_query = self.sign_request(&query).await?;
@@ -74,11 +70,7 @@ impl Account for Binance {
         if let Some(recv) = recv_window {
             query += format!("&recvWindow={}", recv).as_str()
         }
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            "X-MBX-APIKEY",
-            self.api_key.expose_secret().parse().unwrap(),
-        );
+        let headers = generate_base_headers(Some(self.api_key.to_owned())).await;
 
         let signed_query = self.sign_request(&query).await?;
 
@@ -105,7 +97,7 @@ impl DataFetch for Binance {
     async fn public_fetch_order_book(&self, pair: &Pair) -> Result<OrderBook, ArgusErr> {
         let symbol = format!("symbol={}{}", pair.base, pair.quote);
         let endpoint = format!("{}{}?{}", self.public_api_url, "/api/v3/depth", symbol);
-        let headers = HeaderMap::new();
+        let headers = generate_base_headers(None).await;
 
         self.send_request::<OrderBook>(&endpoint, RequestType::GET, None, headers)
             .await
@@ -198,11 +190,7 @@ impl Request for Binance {
     ) -> Result<T, ArgusErr> {
         match request_type {
             RequestType::GET => {
-                let request = self
-                    .client
-                    .get(endpoint)
-                    .header("Accept", "application/json")
-                    .headers(headers);
+                let request = self.client.get(endpoint).headers(headers);
 
                 request
                     .send()
@@ -223,7 +211,6 @@ impl Request for Binance {
                     .client
                     .post(endpoint)
                     .header("Content-Type", "application/json")
-                    .header("Accept", "application/json")
                     .headers(headers)
                     .body(body.unwrap().to_owned());
 
@@ -260,15 +247,12 @@ impl Request for Binance {
 #[async_trait]
 impl SpotOrder for Binance {
     async fn private_send_order(&self, order: OrderRequest) -> Result<OrderResponse, ArgusErr> {
-        let mut headers = HeaderMap::new();
+        let mut headers = generate_base_headers(Some(self.api_key.to_owned())).await;
         headers.insert(
             "Content-Type",
             "application/x-www-form-urlencoded".parse().unwrap(),
         );
-        headers.insert(
-            "X-MBX-APIKEY",
-            self.api_key.expose_secret().parse().unwrap(),
-        );
+
         let symbol = format!(
             "{}{}",
             order.pair.base.to_owned(),
@@ -349,6 +333,15 @@ impl Binance {
 
 async fn generate_timestamp_query() -> String {
     format!("timestamp={}", chrono::Local::now().timestamp_millis())
+}
+
+async fn generate_base_headers(api_key: Option<SecretString>) -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    headers.insert("Accept", "application/json".parse().unwrap());
+    if let Some(api) = api_key {
+        headers.insert("X-MBX-APIKEY", api.expose_secret().parse().unwrap());
+    }
+    headers
 }
 
 /*
