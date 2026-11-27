@@ -4,5 +4,5 @@ use chrono::{DateTime, Local};
 
 #[async_trait]
 pub trait Exchange {
-    async fn public_get_server_time(&self) -> Result<DateTime<Local>, ArgusErr>;
+    async fn public_fetch_server_time(&self) -> Result<DateTime<Local>, ArgusErr>;
 }

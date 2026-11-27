@@ -132,7 +132,7 @@ impl DataFetch for Binance {
 
 #[async_trait]
 impl Exchange for Binance {
-    async fn public_get_server_time(&self) -> Result<DateTime<Local>, ArgusErr> {
+    async fn public_fetch_server_time(&self) -> Result<DateTime<Local>, ArgusErr> {
         let endpoint = format!("{}{}", self.public_api_url, "/api/v3/time");
         let mut headers = HeaderMap::new();
         headers.insert("Content-Type", "application/json".parse().unwrap());
